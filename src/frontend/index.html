@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PaperPilot · AI 科研助手</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  
+  :root {
+    --bg-primary: #0f172a;
+    --bg-secondary: #1e293b;
+    --bg-tertiary: #334155;
+    --text-primary: #f1f5f9;
+    --text-secondary: #cbd5e1;
+    --text-muted: #94a3b8;
+    --accent: #6366f1;
+    --accent-hover: #4f46e5;
+    --accent-light: #818cf8;
+    --success: #10b981;
+    --error: #ef4444;
+    --border: #334155;
+    --shadow: rgba(0, 0, 0, 0.3);
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 24px;
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .logo {
+    font-size: 20px; font-weight: 700;
+    background: linear-gradient(135deg, var(--accent-light), var(--accent));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .badge {
+    padding: 3px 10px; background: var(--accent); color: white;
+    border-radius: 12px; font-size: 11px; font-weight: 600;
+  }
+
+  .header-right { display: flex; gap: 6px; }
+  .step-badge {
+    padding: 5px 12px; background: var(--bg-tertiary); border: 1px solid var(--border);
+    border-radius: 6px; font-size: 12px; color: var(--text-muted); transition: all 0.3s;
+  }
+  .step-badge.active { background: var(--accent); border-color: var(--accent); color: white; box-shadow: 0 0 12px rgba(99,102,241,0.4); }
+  .step-badge.done { background: var(--success); border-color: var(--success); color: white; }
+
+  .main { display: flex; flex: 1; overflow: hidden; }
+
+  /* Sidebar */
+  .sidebar {
+    width: 280px; background: var(--bg-secondary); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .sidebar-top { padding: 16px 16px 8px; }
+  .sidebar-title-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .sidebar-title { font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px; }
+  .btn-new {
+    padding: 4px 10px; background: var(--accent); color: white; border: none;
+    border-radius: 6px; font-size: 11px; cursor: pointer; font-weight: 600;
+  }
+  .btn-new:hover { background: var(--accent-hover); }
+
+  .history-list { flex: 1; overflow-y: auto; padding: 0 16px 16px; }
+  .history-empty { color: var(--text-muted); font-size: 13px; text-align: center; padding: 24px 0; }
+
+  .history-item {
+    padding: 10px 12px; background: var(--bg-tertiary); border-radius: 8px;
+    margin-bottom: 6px; cursor: pointer; transition: all 0.15s;
+    border: 1px solid transparent; position: relative;
+  }
+  .history-item:hover { border-color: var(--accent); transform: translateX(2px); }
+  .history-item.active { border-color: var(--accent); background: rgba(99,102,241,0.15); }
+  .history-item-title { font-size: 13px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .history-item-meta { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+  .history-item .del-btn {
+    position: absolute; top: 8px; right: 8px; width: 20px; height: 20px;
+    background: none; border: none; color: var(--text-muted); cursor: pointer;
+    font-size: 14px; display: none; line-height: 20px; text-align: center; border-radius: 4px;
+  }
+  .history-item:hover .del-btn { display: block; }
+  .history-item .del-btn:hover { background: var(--error); color: white; }
+
+  .sidebar-bottom { padding: 12px 16px; border-top: 1px solid var(--border); }
+  .upload-area {
+    padding: 16px; border: 2px dashed var(--border); border-radius: 8px;
+    text-align: center; cursor: pointer; transition: all 0.2s;
+  }
+  .upload-area:hover { border-color: var(--accent); background: var(--bg-tertiary); }
+  .upload-icon { font-size: 24px; margin-bottom: 4px; opacity: 0.5; }
+  .upload-text { font-size: 12px; color: var(--text-muted); }
+  .upload-formats { font-size: 10px; color: var(--text-muted); opacity: 0.7; }
+
+  /* Content */
+  .content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  .chat-area {
+    flex: 1; overflow-y: auto; padding: 24px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+
+  .message { max-width: 800px; width: 100%; margin: 0 auto; animation: fadeIn 0.3s ease; }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+  .message.user { align-self: flex-end; }
+  .message.assistant { align-self: flex-start; }
+  .bubble { padding: 12px 16px; border-radius: 12px; font-size: 14px; line-height: 1.6; }
+  .message.user .bubble { background: var(--accent); color: white; border-bottom-right-radius: 4px; }
+  .message.assistant .bubble { background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+
+  .followup-badge {
+    display: inline-block; padding: 2px 8px; background: var(--bg-tertiary);
+    border-radius: 4px; font-size: 11px; color: var(--text-muted); margin-bottom: 6px;
+  }
+
+  .welcome-card {
+    max-width: 560px; margin: 60px auto 0; padding: 36px;
+    background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
+    border: 1px solid var(--border); border-radius: 16px; text-align: center;
+    box-shadow: 0 8px 24px var(--shadow);
+  }
+  .welcome-title {
+    font-size: 26px; font-weight: 700; margin-bottom: 12px;
+    background: linear-gradient(135deg, var(--accent-light), var(--text-primary));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .welcome-text { font-size: 14px; color: var(--text-secondary); line-height: 1.7; }
+
+  .session-header {
+    max-width: 800px; width: 100%; margin: 0 auto 8px; padding: 12px 16px;
+    background: var(--bg-secondary); border: 1px solid var(--border);
+    border-radius: 10px; display: flex; align-items: center; justify-content: space-between;
+  }
+  .session-header-query { font-weight: 600; font-size: 14px; }
+  .session-header-meta { font-size: 11px; color: var(--text-muted); }
+
+  .input-area { padding: 16px 24px; background: var(--bg-secondary); border-top: 1px solid var(--border); }
+  .input-wrap { max-width: 800px; margin: 0 auto; display: flex; gap: 10px; }
+  .input-field {
+    flex: 1; padding: 12px 16px; background: var(--bg-primary); border: 2px solid var(--border);
+    border-radius: 10px; color: var(--text-primary); font-size: 14px; outline: none; transition: all 0.2s;
+  }
+  .input-field:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+  .input-field::placeholder { color: var(--text-muted); }
+  .btn-primary {
+    padding: 12px 24px; background: var(--accent); color: white; border: none;
+    border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; white-space: nowrap;
+  }
+  .btn-primary:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(99,102,241,0.3); }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .report-content { line-height: 1.8; }
+  .report-content h1 { font-size: 22px; margin: 20px 0 12px; color: var(--accent-light); }
+  .report-content h2 { font-size: 18px; margin: 16px 0 10px; color: var(--text-primary); }
+  .report-content h3 { font-size: 15px; margin: 14px 0 6px; color: var(--text-primary); }
+  .report-content p { margin: 10px 0; color: var(--text-secondary); }
+  .report-content ul, .report-content ol { margin: 10px 0; padding-left: 24px; }
+  .report-content li { margin: 4px 0; color: var(--text-secondary); }
+  .report-content strong { color: var(--text-primary); font-weight: 600; }
+  .report-content a { color: var(--accent-light); text-decoration: none; }
+  .report-content a:hover { text-decoration: underline; }
+  .report-content code { background: var(--bg-primary); padding: 2px 6px; border-radius: 4px; font-family: "SF Mono","Fira Code",monospace; font-size: 13px; }
+
+  .loading { display: inline-block; animation: pulse 1.5s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  .sub-queries { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .sub-query-tag { padding: 3px 8px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; font-size: 11px; color: var(--text-secondary); }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg-primary); }
+  ::-webkit-scrollbar-thumb { background: var(--bg-tertiary); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--border); }
+
+  /* Chat navigation (right side floating dots) */
+  .content { position: relative; }
+  .chat-nav {
+    position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+    display: flex; flex-direction: column; gap: 8px; z-index: 10;
+    max-height: 70vh; overflow-y: auto;
+  }
+  .chat-nav:empty { display: none; }
+  .chat-nav-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--bg-tertiary); border: 2px solid var(--border);
+    cursor: pointer; transition: all 0.2s; flex-shrink: 0;
+  }
+  .chat-nav-dot:hover { background: var(--accent); border-color: var(--accent); }
+  .chat-nav-dot.active { background: var(--accent); border-color: var(--accent-light); }
+  #nav-tooltip {
+    position: fixed; z-index: 100;
+    background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border);
+    padding: 6px 14px; border-radius: 8px; font-size: 12px;
+    max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    pointer-events: none; opacity: 0; transition: opacity 0.15s;
+  }
+  #nav-tooltip.visible { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="nav-tooltip"></div>
+
+<div class="header">
+  <div class="header-left">
+    <div class="logo">PaperPilot</div>
+    <span class="badge">AI 科研助手</span>
+  </div>
+  <div class="header-right">
+    <div class="step-badge" data-step="planner">规划</div>
+    <div class="step-badge" data-step="researcher">研究</div>
+    <div class="step-badge" data-step="synthesizer">综合</div>
+    <div class="step-badge" data-step="writer">撰写</div>
+    <div class="step-badge" data-step="reviewer">审核</div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="sidebar">
+    <div class="sidebar-top">
+      <div class="sidebar-title-row">
+        <span class="sidebar-title">研究历史</span>
+        <button class="btn-new" onclick="newResearch()">+ 新研究</button>
+      </div>
+    </div>
+    <div class="history-list" id="history-list">
+      <div class="history-empty">暂无历史记录</div>
+    </div>
+    <div class="sidebar-bottom">
+      <div class="upload-area" onclick="document.getElementById('file-input').click()">
+        <div class="upload-icon">📄</div>
+        <div class="upload-text">拖放或点击上传文档</div>
+        <div class="upload-formats">PDF / TXT / MD / DOCX</div>
+        <input type="file" id="file-input" accept=".pdf,.txt,.md,.docx" style="display:none">
+      </div>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="chat-area" id="chat-area">
+      <div class="welcome-card">
+        <div class="welcome-title">欢迎使用 PaperPilot</div>
+        <div class="welcome-text">
+          输入研究问题，我将检索学术论文、代码仓库和网络资源，生成带引用的研究报告。<br>
+          左侧可查看历史研究记录，点击可回顾并继续追问。
+        </div>
+      </div>
+    </div>
+    <div class="chat-nav" id="chat-nav"></div>
+    <div class="input-area">
+      <div class="input-wrap">
+        <input type="text" id="query-input" class="input-field" placeholder="输入您的研究问题..." autofocus>
+        <button id="research-btn" class="btn-primary" onclick="startResearch()">开始研究</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = window.location.origin;
+let ws = null;
+let currentSessionId = null;   // tracks current session for follow-ups
+let timerInterval = null;
+let timerStart = 0;
+let conversationHistory = [];  // [{role, content, report?}] — full session memory
+let lastReportText = '';       // track latest report for history
+let turnAnchors = [];          // [{el, query}] — DOM refs for nav dots
+
+// ─── Chat Navigation ──────────────────────
+let tooltipTimer = null;
+function addNavDot(query, msgEl) {
+  const nav = document.getElementById('chat-nav');
+  const dot = document.createElement('div');
+  dot.className = 'chat-nav-dot';
+  const tooltip = document.getElementById('nav-tooltip');
+  dot.addEventListener('mouseenter', () => {
+    clearTimeout(tooltipTimer);
+    tooltip.textContent = query.length > 40 ? query.substring(0, 40) + '…' : query;
+    const rect = dot.getBoundingClientRect();
+    tooltip.style.top = (rect.top - 36) + 'px';
+    tooltip.style.left = (rect.left + rect.width / 2) + 'px';
+    tooltip.style.right = 'auto';
+    tooltip.style.transform = 'translateX(-50%)';
+    tooltip.classList.add('visible');
+  });
+  dot.addEventListener('mouseleave', () => {
+    tooltipTimer = setTimeout(() => tooltip.classList.remove('visible'), 100);
+  });
+  dot.onclick = () => {
+    tooltip.classList.remove('visible');
+    msgEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  nav.appendChild(dot);
+  turnAnchors.push({ el: msgEl, query, dot });
+}
+
+function clearNav() {
+  document.getElementById('chat-nav').innerHTML = '';
+  turnAnchors = [];
+}
+
+// Highlight active dot based on scroll position
+document.addEventListener('DOMContentLoaded', () => {
+  const chat = document.getElementById('chat-area');
+  chat.addEventListener('scroll', () => {
+    const chatRect = chat.getBoundingClientRect();
+    let activeIdx = 0;
+    for (let i = 0; i < turnAnchors.length; i++) {
+      const rect = turnAnchors[i].el.getBoundingClientRect();
+      if (rect.top <= chatRect.top + 100) activeIdx = i;
+    }
+    turnAnchors.forEach((a, i) => a.dot.classList.toggle('active', i === activeIdx));
+  });
+});
+
+// ─── Timer ─────────────────────────────────
+function startTimer() {
+  timerStart = Date.now();
+  timerInterval = setInterval(() => {
+    const el = document.getElementById('timer-display');
+    if (el) el.textContent = formatElapsed();
+  }, 1000);
+}
+function stopTimer() { if (timerInterval) { clearInterval(timerInterval); timerInterval = null; } }
+function formatElapsed() {
+  const s = Math.floor((Date.now() - timerStart) / 1000);
+  return s >= 60 ? `${Math.floor(s/60)}分${s%60}秒` : `${s}秒`;
+}
+
+// ─── Input ─────────────────────────────────
+document.getElementById('query-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); startResearch(); }
+});
+
+// ─── Start Research ────────────────────────
+function startResearch() {
+  const input = document.getElementById('query-input');
+  const query = input.value.trim();
+  if (!query) return;
+  input.value = '';
+  document.getElementById('research-btn').disabled = true;
+
+  const welcome = document.querySelector('.welcome-card');
+  if (welcome) welcome.remove();
+
+  addMessage('user', query);
+  addNavDot(query, document.querySelector('.message.user:last-child'));
+  // Track user query in conversation history
+  conversationHistory.push({ role: 'user', content: query });
+
+  resetSteps();
+  startTimer();
+  addMessage('assistant', '<span class="loading">正在启动研究流程...</span> <span id="timer-display" style="color:var(--text-muted);font-size:12px">0秒</span>');
+
+  const payload = { query, conversation_history: conversationHistory };
+  if (currentSessionId) payload.session_id = currentSessionId;
+
+  const wsUrl = `ws://${location.host}/ws/research`;
+  ws = new WebSocket(wsUrl);
+  ws.onopen = () => ws.send(JSON.stringify(payload));
+  ws.onmessage = (e) => handleWSEvent(JSON.parse(e.data));
+  ws.onerror = () => { addMessage('assistant', 'WebSocket 连接失败，切换到 HTTP 模式...'); fallbackHTTP(payload); };
+  ws.onclose = () => { ws = null; };
+}
+
+// ─── WebSocket Events ──────────────────────
+function handleWSEvent(msg) {
+  const chat = document.getElementById('chat-area');
+  switch (msg.event) {
+    case 'session_start':
+      currentSessionId = msg.data.session_id;
+      break;
+    case 'node_start': {
+      const last = chat.querySelector('.message.assistant:last-child .bubble');
+      const html = `<span class="loading">${msg.data.message}</span> <span id="timer-display" style="color:var(--text-muted);font-size:12px">${formatElapsed()}</span>`;
+      if (last && last.querySelector('.loading')) { last.innerHTML = html; }
+      else addMessage('assistant', html);
+      break;
+    }
+    case 'node_complete':
+      activateStep(msg.data.node);
+      break;
+    case 'plan': {
+      const tags = msg.data.map(sq =>
+        `<span class="sub-query-tag">${sq.tool}: ${sq.question.substring(0, 50)}</span>`
+      ).join('');
+      addMessage('assistant', `<strong>研究计划：</strong><div class="sub-queries">${tags}</div>`);
+      break;
+    }
+    case 'results':
+      addMessage('assistant', `已收集 ${msg.data.count} 条研究结果`);
+      break;
+    case 'done':
+      stopTimer();
+      completeAllSteps();
+      document.getElementById('research-btn').disabled = false;
+      if (msg.data.report) {
+        // Save report to conversation history
+        conversationHistory.push({ role: 'assistant', content: '', report: msg.data.report });
+        lastReportText = msg.data.report;
+        // Show report first (scrolls to report top), then add completion msg without scroll
+        showReport(msg.data.report);
+        addMessage('assistant', `✅ 研究完成！用时 ${formatElapsed()}，报告已保存至 ${msg.data.report_path}`, false);
+      } else {
+        addMessage('assistant', `✅ 研究完成！用时 ${formatElapsed()}`);
+      }
+      currentSessionId = msg.data.session_id;
+      loadHistory();
+      break;
+    case 'error':
+      stopTimer();
+      addMessage('assistant', `<span style="color:var(--error)">错误：${msg.data}</span>`);
+      document.getElementById('research-btn').disabled = false;
+      break;
+  }
+  // Scroll to bottom for progress events; skip for done (already scrolled to report)
+  if (msg.event !== 'done') {
+    chat.scrollTop = chat.scrollHeight;
+  }
+}
+
+async function fallbackHTTP(payload) {
+  try {
+    const res = await fetch(`${API}/api/research`, {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    stopTimer();
+    if (data.status === 'completed') {
+      completeAllSteps();
+      currentSessionId = data.session_id;
+      const status = await fetch(`${API}/api/sessions/${data.session_id}`).then(r => r.json());
+      if (status.report) showReport(status.report);
+      addMessage('assistant', `✅ 研究完成！用时 ${formatElapsed()}`);
+      loadHistory();
+    } else {
+      addMessage('assistant', `<span style="color:var(--error)">${data.message}</span>`);
+    }
+  } catch (err) {
+    stopTimer();
+    addMessage('assistant', `<span style="color:var(--error)">请求失败：${err.message}</span>`);
+  }
+  document.getElementById('research-btn').disabled = false;
+}
+
+// ─── History ───────────────────────────────
+async function loadHistory() {
+  try {
+    const res = await fetch(`${API}/api/sessions`);
+    const sessions = await res.json();
+    const list = document.getElementById('history-list');
+    if (!sessions.length) { list.innerHTML = '<div class="history-empty">暂无历史记录</div>'; return; }
+    list.innerHTML = sessions.map(s => `
+      <div class="history-item${s.id===currentSessionId?' active':''}" data-id="${s.id}" onclick="loadSession('${s.id}')">
+        <div class="history-item-title">${escHtml(s.query)}</div>
+        <div class="history-item-meta">${s.created_at}</div>
+        <button class="del-btn" onclick="event.stopPropagation();deleteSession('${s.id}')" title="删除">×</button>
+      </div>
+    `).join('');
+  } catch (e) { console.error('loadHistory:', e); }
+}
+
+async function loadSession(id) {
+  try {
+    const res = await fetch(`${API}/api/sessions/${id}`);
+    const s = await res.json();
+    if (s.error) return;
+
+    currentSessionId = s.id;
+    const chat = document.getElementById('chat-area');
+    chat.innerHTML = '';
+    clearNav();
+    resetSteps();
+    completeAllSteps();
+
+    // Rebuild conversation history from session data
+    conversationHistory = [{ role: 'user', content: s.query }];
+    if (s.report) {
+      conversationHistory.push({ role: 'assistant', content: '', report: s.report });
+    }
+
+    // Session header
+    const header = document.createElement('div');
+    header.className = 'session-header';
+    header.innerHTML = `<span class="session-header-query">${escHtml(s.query)}</span><span class="session-header-meta">${s.created_at}</span>`;
+    chat.appendChild(header);
+
+    // Original query + report
+    addMessage('user', s.query);
+    addNavDot(s.query, document.querySelector('.message.user:last-child'));
+    if (s.sub_queries && s.sub_queries.length) {
+      const tags = s.sub_queries.map(sq =>
+        `<span class="sub-query-tag executed">${sq.tool}: ${sq.question.substring(0,50)}</span>`
+      ).join('');
+      addMessage('assistant', `<strong>研究计划：</strong><div class="sub-queries">${tags}</div>`);
+    }
+    if (s.report) showReport(s.report);
+
+    // Follow-ups
+    if (s.followups) {
+      for (const f of s.followups) {
+        conversationHistory.push({ role: 'user', content: f.query });
+        addMessage('user', `<span class="followup-badge">追问</span> ${escHtml(f.query)}`);
+        addNavDot(f.query, document.querySelector('.message.user:last-child'));
+        if (f.report) {
+          showReport(f.report);
+          conversationHistory.push({ role: 'assistant', content: '', report: f.report });
+        }
+      }
+    }
+
+    // Highlight active in sidebar
+    document.querySelectorAll('.history-item').forEach(el => {
+      el.classList.toggle('active', el.dataset.id === id);
+    });
+
+    // Update placeholder
+    document.getElementById('query-input').placeholder = '继续追问这个课题...';
+    chat.scrollTop = chat.scrollHeight;
+  } catch (e) { console.error('loadSession:', e); }
+}
+
+async function deleteSession(id) {
+  if (!confirm('确定删除这条记录？')) return;
+  await fetch(`${API}/api/sessions/${id}`, { method: 'DELETE' });
+  if (currentSessionId === id) { currentSessionId = null; newResearch(); }
+  loadHistory();
+}
+
+function newResearch() {
+  currentSessionId = null;
+  conversationHistory = [];
+  lastReportText = '';
+  clearNav();
+  const chat = document.getElementById('chat-area');
+  chat.innerHTML = `
+    <div class="welcome-card">
+      <div class="welcome-title">欢迎使用 PaperPilot</div>
+      <div class="welcome-text">
+        输入研究问题，我将检索学术论文、代码仓库和网络资源，生成带引用的研究报告。<br>
+        左侧可查看历史研究记录，点击可回顾并继续追问。
+      </div>
+    </div>`;
+  resetSteps();
+  document.getElementById('query-input').placeholder = '输入您的研究问题...';
+  document.getElementById('query-input').focus();
+  document.querySelectorAll('.history-item').forEach(el => el.classList.remove('active'));
+}
+
+// ─── File Upload ───────────────────────────
+document.getElementById('file-input').addEventListener('change', uploadFile);
+const uploadArea = document.querySelector('.upload-area');
+uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.style.borderColor='var(--accent)'; });
+uploadArea.addEventListener('dragleave', () => { uploadArea.style.borderColor='var(--border)'; });
+uploadArea.addEventListener('drop', (e) => {
+  e.preventDefault(); uploadArea.style.borderColor='var(--border)';
+  if (e.dataTransfer.files.length) uploadFile({target:{files:e.dataTransfer.files}});
+});
+
+async function uploadFile(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const form = new FormData(); form.append('file', file);
+  try {
+    const res = await fetch(`${API}/api/documents`, { method:'POST', body: form });
+    const data = await res.json();
+    addMessage('assistant', `✅ 文档已上传：${data.filename}（已索引 ${data.chunk_count} 个文本块）`);
+  } catch (err) {
+    addMessage('assistant', `❌ 上传失败：${err.message}`);
+  }
+}
+
+// ─── Helpers ───────────────────────────────
+function addMessage(role, content, scroll = true) {
+  const chat = document.getElementById('chat-area');
+  const div = document.createElement('div');
+  div.className = `message ${role}`;
+  div.innerHTML = `<div class="bubble">${content}</div>`;
+  chat.appendChild(div);
+  if (scroll) chat.scrollTop = chat.scrollHeight;
+  return div;
+}
+
+function showReport(md) {
+  const html = md
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" target="_blank">$1</a>')
+    .replace(/`(.+?)`/g, '<code>$1</code>')
+    .replace(/\n/g, '<br>');
+  const el = addMessage('assistant', `<div class="report-content">${html}</div>`, false);
+  // Scroll to the TOP of the report so user reads from the beginning
+  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function resetSteps() { document.querySelectorAll('.step-badge').forEach(s => s.classList.remove('active','done')); }
+function activateStep(name) {
+  const steps = document.querySelectorAll('.step-badge'); let found = false;
+  steps.forEach(s => {
+    if (s.dataset.step === name) { s.classList.add('active'); s.classList.remove('done'); found = true; }
+    else if (!found) { s.classList.remove('active'); s.classList.add('done'); }
+  });
+}
+function completeAllSteps() { document.querySelectorAll('.step-badge').forEach(s => { s.classList.remove('active'); s.classList.add('done'); }); }
+
+function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+loadHistory();
+</script>
+</body>
+</html>
