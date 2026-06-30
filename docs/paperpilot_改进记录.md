@@ -204,6 +204,38 @@ dot.addEventListener('mouseleave', () => {
 
 ---
 
+### 问题 7：前端 UI 设计迭代（三轮重构）
+
+**现象**：初始 UI 为科幻/霓虹风格（深色背景、发光效果、粒子动画），用户反馈"丑"、"太简陋"。
+
+**迭代过程**：
+
+1. **第一版 — 科幻霓虹**：深色 `#060a14` 背景、gradient mesh、backdrop-filter blur、SVG 发光图标 → 用户评价"丑"
+2. **第二版 — Glassmorphism**：半透明卡片、模糊背景、发光边框 → 用户评价"背景 UI 一样的丑"
+3. **第三版 — ChatGPT 暗色极简**：`#212121` 纯深灰背景、无边框、无发光、圆形发送按钮、角色头像 → 用户评价"为什么一定要黑的灰的，浅色系一点"
+4. **最终版 — 浅色系极简**：白底 `#f7f7f8`、深色文字 `#0f0f17`、浅灰侧边栏 `#efeff1`、无粒子/发光/渐变
+
+**最终配色**：
+
+```css
+:root {
+  --bg: #f7f7f8;           /* 主背景：浅灰 */
+  --bg-sidebar: #efeff1;   /* 侧边栏：更浅的灰 */
+  --text: #0f0f17;         /* 主文字：深色 */
+  --text-secondary: #3c3c4a;
+  --text-muted: #8b8b9e;
+  --border: #d4d4de;       /* 边框：极淡 */
+  --accent: #6d5bd0;       /* 强调色：紫色 */
+  --success: #16a34a;
+}
+```
+
+**设计原则**：参考 ChatGPT 界面，拒绝粒子/发光/渐变/科幻元素，保持干净留白，信息密度适中。
+
+**涉及文件**：`src/frontend/index.html`（三次完整重写）
+
+---
+
 ### 改动总览
 
 | 文件 | 改动内容 |
@@ -213,4 +245,4 @@ dot.addEventListener('mouseleave', () => {
 | `src/agent/writer.py` | 新增追问写作规则（语言转换/深入/新问题）+ 会话历史注入 prompt |
 | `src/agent/researcher.py` | 新增 `_search_local_docs()` + `local_docs` 工具处理 + 自动 RAG 兜底检索 |
 | `src/backend/websocket_handler.py` | 接收 `conversation_history`、格式化、`_summarize_history()` LLM 摘要压缩、`get_config` 导入 |
-| `src/frontend/index.html` | `conversationHistory` 数组追踪、请求携带历史、报告滚到顶部（`done` 事件顺序修复）、`loadSession` 重建历史、`newResearch` 清空历史、对话导航圆点 + 固定定位 tooltip（去 scale 防抖） |
+| `src/frontend/index.html` | `conversationHistory` 数组追踪、请求携带历史、报告滚到顶部（`done` 事件顺序修复）、`loadSession` 重建历史、`newResearch` 清空历史、对话导航圆点 + 固定定位 tooltip（去 scale 防抖）、浅色系极简 UI（三轮重构：科幻→glassmorphism→暗色极简→浅色系） |
