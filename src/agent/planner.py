@@ -8,6 +8,7 @@ conversation context use the LLM planner.
 from __future__ import annotations
 
 import json
+from datetime import datetime
 
 from langchain_core.messages import SystemMessage
 
@@ -16,12 +17,17 @@ from src.llm.client import create_llm
 from src.utils.config import get_config
 from src.utils.logging import logger
 
+# Dynamic year strings — always current + previous year
+_YEAR_NOW = datetime.now().year
+_YEAR_PREV = _YEAR_NOW - 1
+_YEARS = f"{_YEAR_PREV} {_YEAR_NOW}"
+
 # Shortened LLM prompt — only used for follow-up questions
-LLM_PROMPT = """\
+LLM_PROMPT = f"""\
 Decompose the research question into 3-4 sub-queries. Tools: arxiv, github, web_search, local_docs.
-If "上传/这篇论文" mentioned, include a local_docs sub-query. Append "2024 2025" to arxiv queries about recent topics.
+If "上传/这篇论文" mentioned, include a local_docs sub-query. Append "{_YEARS}" to arxiv queries about recent topics.
 For follow-ups: language change → 1 web_search sub-query; deepening → focused sub-queries.
-Reply JSON only: [{"id":"q1","question":"...","tool":"arxiv"}, ...]
+Reply JSON only: [{{"id":"q1","question":"...","tool":"arxiv"}}, ...]
 """
 
 
@@ -43,14 +49,14 @@ def _fast_plan(query: str) -> list[SubQuery]:
         sub_queries.append(SubQuery(id="q1", question=q, tool="local_docs", status="pending"))
 
     # ArXiv for academic/survey papers
-    arxiv_q = f"{q} 综述 2024 2025" if has_latest_intent else f"{q} 研究论文"
+    arxiv_q = f"{q} 综述 {_YEARS}" if has_latest_intent else f"{q} 研究论文"
     sub_queries.append(SubQuery(id=f"q{len(sub_queries)+1}", question=arxiv_q, tool="arxiv", status="pending"))
 
     # Web search for latest trends/news
     if has_latest_intent:
-        web_q = f"{q} 最新进展 2024 2025"
+        web_q = f"{q} 最新进展 {_YEARS}"
         sub_queries.append(SubQuery(id=f"q{len(sub_queries)+1}", question=web_q, tool="web_search", status="pending"))
-        sub_queries.append(SubQuery(id=f"q{len(sub_queries)+1}", question=f"{q} 应用案例和行业动态", tool="web_search", status="pending"))
+        sub_queries.append(SubQuery(id=f"q{len(sub_queries)+1}", question=f"{q} 应用案例和行业动态 {_YEAR_NOW}", tool="web_search", status="pending"))
     else:
         sub_queries.append(SubQuery(id=f"q{len(sub_queries)+1}", question=f"{q} 概述和应用", tool="web_search", status="pending"))
 
@@ -60,7 +66,7 @@ def _fast_plan(query: str) -> list[SubQuery]:
 
     # Multi-agent / collaboration sub-topic
     if "agent" in q.lower() or "智能体" in q:
-        sub_queries.append(SubQuery(id=f"q{len(sub_queries)+1}", question=f"{q} 多智能体协作 2024 2025", tool="arxiv", status="pending"))
+        sub_queries.append(SubQuery(id=f"q{len(sub_queries)+1}", question=f"{q} 多智能体协作 {_YEARS}", tool="arxiv", status="pending"))
 
     # Cap at 4
     return sub_queries[:4]
