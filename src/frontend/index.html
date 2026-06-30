@@ -526,7 +526,7 @@ function startResearch() {
   startTimer();
   addProcessItem(`<div class="loading-wrap"><div class="loading-dots"><span></span><span></span><span></span></div><span>正在启动研究流程...</span><span id="timer-display" class="timer-display">0秒</span></div>`);
 
-  const payload = { query, conversation_history: conversationHistory };
+  const payload = { query, conversation_history: conversationHistory.slice(0, -1) };
   if (currentSessionId) payload.session_id = currentSessionId;
 
   const wsUrl = `ws://${location.host}/ws/research`;

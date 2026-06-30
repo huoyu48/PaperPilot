@@ -43,9 +43,14 @@ def build_graph() -> StateGraph:
     return graph
 
 
+_compiled_agent = None
+
+
 def create_agent():
-    """Create a compiled, invokable research agent."""
-    graph = build_graph()
-    compiled = graph.compile()
-    logger.info("Agent graph compiled: planner → researcher → writer → reviewer")
-    return compiled
+    """Create a compiled, invokable research agent (cached)."""
+    global _compiled_agent
+    if _compiled_agent is None:
+        graph = build_graph()
+        _compiled_agent = graph.compile()
+        logger.info("Agent graph compiled: planner → researcher → writer → reviewer")
+    return _compiled_agent
