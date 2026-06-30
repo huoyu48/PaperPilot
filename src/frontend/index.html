@@ -417,7 +417,7 @@
       <div class="logo-icon"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div>
       <span class="logo-text">PaperPilot</span>
     </div>
-    <span class="badge">AI Research</span>
+    <span class="badge">AI 科研助手</span>
   </div>
   <div class="pipeline">
     <div class="step-badge" data-step="planner"><svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" fill="none" stroke="currentColor" stroke-width="2"/></svg>规划</div>
@@ -432,17 +432,17 @@
   <div class="sidebar">
     <div class="sidebar-top">
       <div class="sidebar-title-row">
-        <span class="sidebar-title">Research History</span>
-        <button class="btn-new" onclick="newResearch()">+ New</button>
+        <span class="sidebar-title">研究历史</span>
+        <button class="btn-new" onclick="newResearch()">+ 新研究</button>
       </div>
     </div>
     <div class="history-list" id="history-list">
-      <div class="history-empty">No history yet</div>
+      <div class="history-empty">暂无历史记录</div>
     </div>
     <div class="sidebar-bottom">
       <div class="upload-area" onclick="document.getElementById('file-input').click()">
         <div class="upload-icon"><svg viewBox="0 0 24 24"><path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
-        <div class="upload-text">Upload Documents</div>
+        <div class="upload-text">上传文档</div>
         <div class="upload-formats">PDF / TXT / MD / DOCX</div>
         <input type="file" id="file-input" accept=".pdf,.txt,.md,.docx" style="display:none">
       </div>
@@ -476,7 +476,7 @@
     <div class="chat-nav" id="chat-nav"></div>
     <div class="input-area">
       <div class="input-wrap">
-        <input type="text" id="query-input" class="input-field" placeholder="Describe your research question..." autofocus>
+        <input type="text" id="query-input" class="input-field" placeholder="输入您的研究问题..." autofocus>
         <button id="research-btn" class="btn-primary" onclick="startResearch()">
           <svg viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
           Start
@@ -582,7 +582,7 @@ function startResearch() {
 
   resetSteps();
   startTimer();
-  addMessage('assistant', `<div class="loading-wrap"><div class="loading-dots"><span></span><span></span><span></span></div><span>Initializing research pipeline...</span><span id="timer-display" class="timer-display">0s</span></div>`);
+  addMessage('assistant', `<div class="loading-wrap"><div class="loading-dots"><span></span><span></span><span></span></div><span>正在启动研究流程...</span><span id="timer-display" class="timer-display">0s</span></div>`);
 
   const payload = { query, conversation_history: conversationHistory };
   if (currentSessionId) payload.session_id = currentSessionId;
@@ -591,7 +591,7 @@ function startResearch() {
   ws = new WebSocket(wsUrl);
   ws.onopen = () => ws.send(JSON.stringify(payload));
   ws.onmessage = (e) => handleWSEvent(JSON.parse(e.data));
-  ws.onerror = () => { addMessage('assistant', 'WebSocket connection failed, falling back to HTTP...'); fallbackHTTP(payload); };
+  ws.onerror = () => { addMessage('assistant', 'WebSocket 连接失败，切换到 HTTP 模式...'); fallbackHTTP(payload); };
   ws.onclose = () => { ws = null; };
 }
 
@@ -616,11 +616,11 @@ function handleWSEvent(msg) {
       const tags = msg.data.map(sq =>
         `<span class="sub-query-tag">${sq.tool}: ${sq.question.substring(0, 50)}</span>`
       ).join('');
-      addMessage('assistant', `<strong style="color:var(--text-primary);font-size:13px">Research Plan</strong><div class="sub-queries">${tags}</div>`);
+      addMessage('assistant', `<strong style="color:var(--text-primary);font-size:13px">研究计划：</strong><div class="sub-queries">${tags}</div>`);
       break;
     }
     case 'results':
-      addMessage('assistant', `<span style="color:var(--cyan)">${msg.data.count}</span> results collected`);
+      addMessage('assistant', `<span style="color:var(--cyan)">${msg.data.count}</span> 条研究结果`);
       break;
     case 'done':
       stopTimer();
@@ -630,16 +630,16 @@ function handleWSEvent(msg) {
         conversationHistory.push({ role: 'assistant', content: '', report: msg.data.report });
         lastReportText = msg.data.report;
         showReport(msg.data.report);
-        addMessage('assistant', `<div class="done-card"><svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" fill="none" stroke="currentColor" stroke-width="2"/></svg><div><span>Research complete</span><span class="done-meta">${formatElapsed()} · ${msg.data.report_path}</span></div></div>`, false);
+        addMessage('assistant', `<div class="done-card"><svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" fill="none" stroke="currentColor" stroke-width="2"/></svg><div><span>研究完成</span><span class="done-meta">${formatElapsed()} · ${msg.data.report_path}</span></div></div>`, false);
       } else {
-        addMessage('assistant', `<div class="done-card"><svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" fill="none" stroke="currentColor" stroke-width="2"/></svg><span>Research complete · ${formatElapsed()}</span></div>`);
+        addMessage('assistant', `<div class="done-card"><svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" fill="none" stroke="currentColor" stroke-width="2"/></svg><span>研究完成 · ${formatElapsed()}</span></div>`);
       }
       currentSessionId = msg.data.session_id;
       loadHistory();
       break;
     case 'error':
       stopTimer();
-      addMessage('assistant', `<span style="color:var(--error)">Error: ${msg.data}</span>`);
+      addMessage('assistant', `<span style="color:var(--error)">错误：${msg.data}</span>`);
       document.getElementById('research-btn').disabled = false;
       break;
   }
@@ -660,14 +660,14 @@ async function fallbackHTTP(payload) {
       currentSessionId = data.session_id;
       const status = await fetch(`${API}/api/sessions/${data.session_id}`).then(r => r.json());
       if (status.report) showReport(status.report);
-      addMessage('assistant', `<div class="done-card"><span>Research complete · ${formatElapsed()}</span></div>`);
+      addMessage('assistant', `<div class="done-card"><span>研究完成 · ${formatElapsed()}</span></div>`);
       loadHistory();
     } else {
       addMessage('assistant', `<span style="color:var(--error)">${data.message}</span>`);
     }
   } catch (err) {
     stopTimer();
-    addMessage('assistant', `<span style="color:var(--error)">Request failed: ${err.message}</span>`);
+    addMessage('assistant', `<span style="color:var(--error)">请求失败： ${err.message}</span>`);
   }
   document.getElementById('research-btn').disabled = false;
 }
@@ -678,12 +678,12 @@ async function loadHistory() {
     const res = await fetch(`${API}/api/sessions`);
     const sessions = await res.json();
     const list = document.getElementById('history-list');
-    if (!sessions.length) { list.innerHTML = '<div class="history-empty">No history yet</div>'; return; }
+    if (!sessions.length) { list.innerHTML = '<div class="history-empty">暂无历史记录</div>'; return; }
     list.innerHTML = sessions.map(s => `
       <div class="history-item${s.id===currentSessionId?' active':''}" data-id="${s.id}" onclick="loadSession('${s.id}')">
         <div class="history-item-title">${escHtml(s.query)}</div>
         <div class="history-item-meta">${s.created_at}</div>
-        <button class="del-btn" onclick="event.stopPropagation();deleteSession('${s.id}')" title="Delete">×</button>
+        <button class="del-btn" onclick="event.stopPropagation();deleteSession('${s.id}')" title="删除">×</button>
       </div>
     `).join('');
   } catch (e) { console.error('loadHistory:', e); }
@@ -718,14 +718,14 @@ async function loadSession(id) {
       const tags = s.sub_queries.map(sq =>
         `<span class="sub-query-tag executed">${sq.tool}: ${sq.question.substring(0,50)}</span>`
       ).join('');
-      addMessage('assistant', `<strong style="color:var(--text-primary);font-size:13px">Research Plan</strong><div class="sub-queries">${tags}</div>`);
+      addMessage('assistant', `<strong style="color:var(--text-primary);font-size:13px">研究计划：</strong><div class="sub-queries">${tags}</div>`);
     }
     if (s.report) showReport(s.report);
 
     if (s.followups) {
       for (const f of s.followups) {
         conversationHistory.push({ role: 'user', content: f.query });
-        addMessage('user', `<span class="followup-badge">Follow-up</span> ${escHtml(f.query)}`);
+        addMessage('user', `<span class="followup-badge">追问</span> ${escHtml(f.query)}`);
         addNavDot(f.query, document.querySelector('.message.user:last-child'));
         if (f.report) {
           showReport(f.report);
@@ -738,13 +738,13 @@ async function loadSession(id) {
       el.classList.toggle('active', el.dataset.id === id);
     });
 
-    document.getElementById('query-input').placeholder = 'Continue this research...';
+    document.getElementById('query-input').placeholder = '继续追问这个课题...';
     chat.scrollTop = chat.scrollHeight;
   } catch (e) { console.error('loadSession:', e); }
 }
 
 async function deleteSession(id) {
-  if (!confirm('Delete this session?')) return;
+  if (!confirm('确定删除这条记录？')) return;
   await fetch(`${API}/api/sessions/${id}`, { method: 'DELETE' });
   if (currentSessionId === id) { currentSessionId = null; newResearch(); }
   loadHistory();
@@ -770,7 +770,7 @@ function newResearch() {
       </div>
     </div>`;
   resetSteps();
-  document.getElementById('query-input').placeholder = 'Describe your research question...';
+  document.getElementById('query-input').placeholder = '输入您的研究问题...';
   document.getElementById('query-input').focus();
   document.querySelectorAll('.history-item').forEach(el => el.classList.remove('active'));
 }
@@ -791,9 +791,9 @@ async function uploadFile(e) {
   try {
     const res = await fetch(`${API}/api/documents`, { method:'POST', body: form });
     const data = await res.json();
-    addMessage('assistant', `<span style="color:var(--success)">Document uploaded:</span> ${data.filename} <span style="color:var(--text-muted)">(${data.chunk_count} chunks indexed)</span>`);
+    addMessage('assistant', `<span style="color:var(--success)">文档已上传：</span> ${data.filename} <span style="color:var(--text-muted)">(${data.chunk_count} 个文本块已索引)</span>`);
   } catch (err) {
-    addMessage('assistant', `<span style="color:var(--error)">Upload failed: ${err.message}</span>`);
+    addMessage('assistant', `<span style="color:var(--error)">上传失败： ${err.message}</span>`);
   }
 }
 
