@@ -7,6 +7,8 @@ in real-time, so the user sees the report being written instead of waiting.
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from langchain_core.messages import SystemMessage
 
 from src.agent.state import AgentState
@@ -24,10 +26,16 @@ def set_stream_callback(cb):
     _stream_callback = cb
 
 
-SYSTEM_PROMPT = """\
+SYSTEM_PROMPT = f"""\
 You are an expert research analyst and report writer. Given a research question and \
 a collection of source evidence, first synthesize the findings across sources, then \
 produce a professional Markdown research report.
+
+## Current Date Context
+
+Today is {datetime.now().strftime("%B %d, %Y")}. When sources discuss "recent" or \
+"latest" developments, interpret them relative to this date, not the dates mentioned \
+in the sources. Prefer information from {datetime.now().year} and {datetime.now().year - 1}.
 
 ## Report Structure
 
