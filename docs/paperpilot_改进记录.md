@@ -236,13 +236,105 @@ dot.addEventListener('mouseleave', () => {
 
 ---
 
+### 问题 8：研究流程耗时过长（规划 2 分钟+）
+
+**现象**：用户提问后，规划阶段耗时超过 2 分钟，整体流程经常超过 5 分钟。对比 ChatGPT 几秒出结果，体验差距明显。
+
+**根因分析**：
+
+1. **Planner 不必要地调用 LLM**：对于简单新查询（如"介绍下 agent 最新发展"），完全可以用规则生成子查询，但每次都调用 DeepSeek API，而 API 响应慢时耗时 1-2 分钟。
+2. **子查询串行执行**：4 个 arxiv/web_search 子查询逐个执行，每个 3-10 秒，总耗时 15-40 秒。实际上它们之间无依赖，可以并行。
+3. **Synthesizer + Writer 两次 LLM 调用**：synthesizer 做交叉分析，writer 再拿分析结果+同样的源数据写报告，两次调用有大量重复输入。
+4. **ArXiv 强制 1 秒/结果延迟**：`arxiv.Client(delay_seconds=1.0)`，5 个结果 = 5 秒等待。
+5. **LLM 参数不合理**：planner 只输出 ~200 token JSON，但 `max_tokens=4096`、`temperature=0.7`，高温导致更多重试。
+6. **Writer 非流式输出**：用户要等整个报告生成完毕才能看到内容。
+
+**修复**（分两轮优化）：
+
+**第一轮：并行化 + 节点合并 + 参数调优**
+
+1. **researcher.py** — `ThreadPoolExecutor` 并行执行所有子查询：
+```python
+with ThreadPoolExecutor(max_workers=min(len(pending), 5)) as pool:
+    future_to_sq = {pool.submit(_execute_single, sq): sq for sq in pending}
+    for future in as_completed(future_to_sq):
+        results = future.result()
+        all_results.extend(results)
+```
+
+2. **graph.py** — 合并 synthesizer 到 writer，5 节点变 4 节点：
+```
+planner → researcher → writer → reviewer  (原来 5 节点)
+```
+
+3. **arxiv_tool.py** — `delay_seconds` 1.0→0.05，`max_results` 5→3
+
+4. **planner.py** — `temperature` 0.7→0.2，`max_tokens` 4096→256
+
+5. **reviewer.py** — `temperature` 0.7→0.1，`max_tokens` 4096→256，修订上限 2→1
+
+6. **client.py** — LLM 客户端缓存，复用 HTTP 连接
+
+7. **websocket_handler.py** — 轮询间隔 200ms→50ms
+
+8. **config.py** — `search_max_results` 5→3
+
+**第二轮：规则化快速 Planner + Writer 流式输出**
+
+1. **planner.py** — 新增 `_fast_plan()` 函数，基于关键词规则生成子查询，跳过 LLM 调用：
+```python
+def _fast_plan(query: str) -> list[SubQuery]:
+    # 检测"最新/发展/趋势"→ arxiv + web_search
+    # 检测"代码/实现/github"→ github
+    # 检测"上传/这篇"→ local_docs
+    # 规则生成 3-4 个子查询，0 秒完成
+
+def planner_node(state):
+    if not history:  # 新查询 → 规则化，不调 LLM
+        return {"sub_queries": _fast_plan(query)}
+    # 追问 → LLM（精简 prompt，~60 词）
+```
+
+2. **writer.py** — 流式输出，用户实时看到报告生成：
+```python
+_stream_callback = None  # 模块级回调
+
+def writer_node(state):
+    if _stream_callback:
+        full_text = ""
+        for chunk in llm.stream(messages):
+            full_text += chunk.content
+            _stream_callback(chunk.content)  # 推送到前端
+    else:
+        response = llm.invoke(messages)
+```
+
+3. **websocket_handler.py** — 设置流式回调，转发 `report_chunk` 事件
+
+4. **frontend** — `report_chunk` 事件处理：渐进式 Markdown 渲染（`requestAnimationFrame` 节流）
+
+**效果**：
+- 规划阶段：2 分钟 → 0 秒（新查询）/ 10-20 秒（追问）
+- 检索阶段：15-40 秒 → 3-10 秒（并行）
+- 报告生成：等待 30-60 秒 → 实时流式输出，首字延迟 < 2 秒
+- 整体感知速度提升约 70-80%
+
+**涉及文件**：`src/agent/planner.py`, `src/agent/writer.py`, `src/agent/researcher.py`, `src/agent/graph.py`, `src/agent/reviewer.py`, `src/backend/websocket_handler.py`, `src/llm/client.py`, `src/tools/arxiv_tool.py`, `src/utils/config.py`, `src/frontend/index.html`
+
+---
+
 ### 改动总览
 
 | 文件 | 改动内容 |
 |------|---------|
 | `src/agent/state.py` | 新增 `conversation_history: str` 字段 |
-| `src/agent/planner.py` | 新增 `local_docs` 工具 + 追问识别规则 + 会话历史注入 prompt |
-| `src/agent/writer.py` | 新增追问写作规则（语言转换/深入/新问题）+ 会话历史注入 prompt |
-| `src/agent/researcher.py` | 新增 `_search_local_docs()` + `local_docs` 工具处理 + 自动 RAG 兜底检索 |
-| `src/backend/websocket_handler.py` | 接收 `conversation_history`、格式化、`_summarize_history()` LLM 摘要压缩、`get_config` 导入 |
-| `src/frontend/index.html` | `conversationHistory` 数组追踪、请求携带历史、报告滚到顶部（`done` 事件顺序修复）、`loadSession` 重建历史、`newResearch` 清空历史、对话导航圆点 + 固定定位 tooltip（去 scale 防抖）、浅色系极简 UI（三轮重构：科幻→glassmorphism→暗色极简→浅色系） |
+| `src/agent/planner.py` | 新增 `local_docs` 工具 + 追问识别规则 + 会话历史注入 + 规则化快速 planner（新查询跳过 LLM）+ 精简 LLM prompt |
+| `src/agent/writer.py` | 合并 synthesizer 逻辑 + 流式输出（`llm.stream()` + chunk 回调）+ 追问写作规则 + 会话历史注入 |
+| `src/agent/researcher.py` | 新增 `_search_local_docs()` + `local_docs` 工具处理 + 自动 RAG 兜底检索 + `ThreadPoolExecutor` 并行执行子查询 |
+| `src/agent/graph.py` | 合并 synthesizer 到 writer，5 节点变 4 节点 |
+| `src/agent/reviewer.py` | 降低 temperature 0.7→0.1、max_tokens 4096→256、修订上限 2→1 |
+| `src/backend/websocket_handler.py` | 接收 `conversation_history`、格式化、`_summarize_history()` LLM 摘要压缩、设置 writer 流式回调、转发 `report_chunk` 事件、轮询间隔 200ms→50ms |
+| `src/llm/client.py` | LLM 客户端缓存（复用 HTTP 连接） |
+| `src/tools/arxiv_tool.py` | `delay_seconds` 1.0→0.05、`max_results` 5→3 |
+| `src/utils/config.py` | `search_max_results` 5→3 |
+| `src/frontend/index.html` | `conversationHistory` 数组追踪、请求携带历史、报告滚到顶部、`loadSession` 重建历史、`newResearch` 清空历史、对话导航圆点 + 固定定位 tooltip、浅色系极简 UI（三轮重构）、折叠思考块、`report_chunk` 渐进式 Markdown 渲染（`requestAnimationFrame` 节流）、4 步 pipeline（移除综合步骤） |
