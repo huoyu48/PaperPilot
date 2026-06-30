@@ -35,7 +35,7 @@ def reviewer_node(state: AgentState) -> dict:
     cfg = get_config()
     llm = create_llm(
         cfg.llm_provider, cfg.llm_api_key, cfg.llm_base_url, cfg.llm_model,
-        temperature=cfg.temperature, max_tokens=cfg.max_tokens,
+        temperature=0.1, max_tokens=256,
     )
 
     logger.info(f"Reviewer: evaluating report (revision #{state.get('revision_count', 0)})")
@@ -65,7 +65,7 @@ def reviewer_node(state: AgentState) -> dict:
         feedback = ""
 
     revision_count = state.get("revision_count", 0)
-    needs_revision = not approved and revision_count < 2
+    needs_revision = not approved and revision_count < 1
 
     return {
         "review_feedback": feedback,

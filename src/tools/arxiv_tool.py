@@ -12,12 +12,12 @@ class ArxivSearchTool(BaseTool):
     name: str = "arxiv_search"
     description: str = "Search Arxiv for academic papers. Input: search query. Returns paper metadata and abstracts."
 
-    max_results: int = 5
+    max_results: int = 3
 
     def _run(self, query: str) -> list[dict]:
         logger.info(f"Arxiv: searching '{query[:60]}'")
         try:
-            client = arxiv.Client(page_size=self.max_results, delay_seconds=1.0)
+            client = arxiv.Client(page_size=self.max_results, delay_seconds=0.05)
             search = arxiv.Search(
                 query=query,
                 max_results=self.max_results,

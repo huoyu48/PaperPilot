@@ -30,7 +30,7 @@ class AppConfig(BaseSettings):
 
     # --- Tool tokens ---
     github_token: str = ""
-    search_max_results: int = 5
+    search_max_results: int = 3
 
     # --- Storage ---
     chroma_path: str = "data/chroma"

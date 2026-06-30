@@ -1,4 +1,4 @@
-"""Writer node: generates structured Markdown report with citations."""
+"""Writer node: cross-source analysis + report generation in one LLM call."""
 
 from __future__ import annotations
 
@@ -10,17 +10,24 @@ from src.utils.config import get_config
 from src.utils.logging import logger
 
 SYSTEM_PROMPT = """\
-You are a research report writer. Given a research question, a synthesis of findings, \
-and the original source evidence, produce a professional Markdown research report.
+You are an expert research analyst and report writer. Given a research question and \
+a collection of source evidence, first synthesize the findings across sources, then \
+produce a professional Markdown research report.
+
+## Synthesis Phase (internal — think before writing)
+
+1. Identify 3-5 major themes across sources
+2. Find converging evidence where multiple sources agree
+3. Note contradictions and gaps
+4. Assess source quality and relevance
 
 ## Report Structure
 
-1. **Abstract** — 2-3 sentence executive summary
-2. **Introduction** — Context, why this question matters, scope
-3. **Methodology** — How research was conducted (tools used, search strategy)
-4. **Key Findings** — Organized by theme, with specific data and citations
-5. **Discussion** — Implications, limitations, open questions
-6. **References** — Numbered list of all cited sources
+1. **摘要** — 2-3 sentence executive summary
+2. **引言** — Context, why this question matters, scope
+3. **主要发现** — Organized by theme, with specific data and citations
+4. **讨论** — Implications, limitations, open questions
+5. **参考文献** — Numbered list of all cited sources
 
 ## Citation Format
 
@@ -30,8 +37,9 @@ Use numbered inline citations [1], [2], etc. Every factual claim MUST be cited.
 
 - Include specific numbers, dates, and technical details from sources
 - Never hedge without evidence ("it is believed" → cite who believes it)
-- If synthesis identifies gaps, explicitly state them in Discussion
+- If sources have gaps, explicitly state them in Discussion
 - Keep the report between 1500-3000 words
+- Write in the SAME language as the user's question
 
 ## Follow-up / Conversation Context
 
@@ -48,19 +56,20 @@ def writer_node(state: AgentState) -> dict:
     cfg = get_config()
     llm = create_llm(
         cfg.llm_provider, cfg.llm_api_key, cfg.llm_base_url, cfg.llm_model,
-        temperature=cfg.temperature, max_tokens=cfg.max_tokens,
+        temperature=0.3, max_tokens=cfg.max_tokens,
     )
 
-    logger.info("Writer: generating research report")
+    logger.info("Writer: analyzing sources and generating report")
 
     results = state.get("research_results", [])
     sources_parts: list[str] = []
     for i, r in enumerate(results, 1):
         sources_parts.append(
-            f"[{i}] {r['title']}\n    Tool: {r['tool']} | URL: {r['url']}\n"
-            f"    {r['content'][:500]}"
+            f"[Source {i}] ({r['tool']}) {r['title']}\n"
+            f"URL: {r['url']}\n"
+            f"{r['content'][:600]}"
         )
-    sources_text = "\n\n".join(sources_parts)
+    sources_text = "\n\n---\n\n".join(sources_parts)
 
     revision_context = ""
     if state.get("review_feedback") and state.get("needs_revision"):
@@ -72,8 +81,7 @@ def writer_node(state: AgentState) -> dict:
 
     prompt = (
         f"## Research Question\n{state['query']}\n\n"
-        f"## Synthesis\n{state.get('synthesis', 'N/A')}\n\n"
-        f"## Source Evidence\n{sources_text}"
+        f"## Source Evidence ({len(results)} sources)\n\n{sources_text}"
         f"{revision_context}"
     )
 
@@ -89,6 +97,7 @@ def writer_node(state: AgentState) -> dict:
 
     logger.info("Writer: report generated")
     return {
+        "synthesis": "(integrated into report)",
         "report": response.content,
         "messages": [response],
     }

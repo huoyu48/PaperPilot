@@ -3,6 +3,9 @@ from __future__ import annotations
 from langchain_core.embeddings import Embeddings
 from langchain_core.language_models import BaseChatModel
 
+# Simple LRU-style cache for LLM clients
+_llm_cache: dict = {}
+
 
 def create_llm(
     provider: str,
@@ -12,18 +15,24 @@ def create_llm(
     temperature: float = 0.7,
     max_tokens: int = 4096,
 ) -> BaseChatModel:
-    """Factory: 返回 LangChain ChatModel。
+    """Factory: 返回 LangChain ChatModel (cached to reuse HTTP connections).
     支持任何 OpenAI-compatible API (DeepSeek / Qwen DashScope / OpenAI)。
     """
+    cache_key = (model, temperature, max_tokens)
+    if cache_key in _llm_cache:
+        return _llm_cache[cache_key]
+
     from langchain_openai import ChatOpenAI
 
-    return ChatOpenAI(
+    llm = ChatOpenAI(
         api_key=api_key,
         base_url=base_url,
         model=model,
         temperature=temperature,
         max_tokens=max_tokens,
     )
+    _llm_cache[cache_key] = llm
+    return llm
 
 
 def create_embeddings(

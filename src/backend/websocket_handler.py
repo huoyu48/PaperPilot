@@ -18,8 +18,7 @@ from src.utils.logging import logger
 NODE_LABELS = {
     "planner": "正在规划研究方案...",
     "researcher": "正在检索多源资料...",
-    "synthesizer": "正在交叉分析文献...",
-    "writer": "正在生成研究报告...",
+    "writer": "正在分析文献并生成报告...",
     "reviewer": "正在审核报告质量...",
 }
 
@@ -175,7 +174,7 @@ async def research_websocket(websocket: WebSocket):
             try:
                 event_type, event_data = event_queue.get_nowait()
             except queue.Empty:
-                await asyncio.sleep(0.2)
+                await asyncio.sleep(0.05)
                 # Check if stream is done
                 if stream_thread.done():
                     break
@@ -189,7 +188,7 @@ async def research_websocket(websocket: WebSocket):
                 last_node = event_data
 
                 # Send next node start if applicable
-                node_order = ["planner", "researcher", "synthesizer", "writer", "reviewer"]
+                node_order = ["planner", "researcher", "writer", "reviewer"]
                 if event_data in node_order:
                     idx = node_order.index(event_data)
                     if idx + 1 < len(node_order):
