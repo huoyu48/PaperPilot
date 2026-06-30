@@ -488,8 +488,9 @@ document.addEventListener('DOMContentLoaded', () => {
 function startTimer() {
   timerStart = Date.now();
   timerInterval = setInterval(() => {
-    const el = document.getElementById('timer-display');
-    if (el) el.textContent = formatElapsed();
+    // Update the last .timer-display element (there may be multiple loading items in DOM)
+    const els = document.querySelectorAll('.timer-display');
+    if (els.length > 0) els[els.length - 1].textContent = formatElapsed();
   }, 1000);
 }
 function stopTimer() { if (timerInterval) { clearInterval(timerInterval); timerInterval = null; } }
@@ -524,7 +525,7 @@ function startResearch() {
   streamingReport = '';
   resetSteps();
   startTimer();
-  addProcessItem(`<div class="loading-wrap"><div class="loading-dots"><span></span><span></span><span></span></div><span>正在启动研究流程...</span><span id="timer-display" class="timer-display">0秒</span></div>`);
+  addProcessItem(`<div class="loading-wrap"><div class="loading-dots"><span></span><span></span><span></span></div><span>正在启动研究流程...</span><span class="timer-display">0秒</span></div>`);
 
   const payload = { query, conversation_history: conversationHistory.slice(0, -1) };
   if (currentSessionId) payload.session_id = currentSessionId;
@@ -564,7 +565,7 @@ function handleWSEvent(msg) {
       currentSessionId = msg.data.session_id;
       break;
     case 'node_start': {
-      const html = `<div class="loading-wrap"><div class="loading-dots"><span></span><span></span><span></span></div><span>${msg.data.message}</span><span id="timer-display" class="timer-display">${formatElapsed()}</span></div>`;
+      const html = `<div class="loading-wrap"><div class="loading-dots"><span></span><span></span><span></span></div><span>${msg.data.message}</span><span class="timer-display">${formatElapsed()}</span></div>`;
       // Update last item if it's a loading item, otherwise add new
       const body = processBlock?.querySelector('.thinking-body');
       const lastItem = body?.querySelector('.thinking-item:last-child');
@@ -579,7 +580,20 @@ function handleWSEvent(msg) {
       activateStep(msg.data.node);
       const stepNames = { planner: '规划', researcher: '研究', writer: '撰写', reviewer: '审核' };
       const name = stepNames[msg.data.node] || msg.data.node;
-      addProcessItem(`<span style="color:var(--success)">✓</span> ${name}完成`);
+      // Find the LAST loading item (not just last child — plan/results may have added items after it)
+      const body = processBlock?.querySelector('.thinking-body');
+      const allItems = body?.querySelectorAll('.thinking-item');
+      let lastLoading = null;
+      if (allItems) {
+        for (const item of allItems) {
+          if (item.querySelector('.loading-wrap')) lastLoading = item;
+        }
+      }
+      if (lastLoading) {
+        lastLoading.innerHTML = `<span style="color:var(--success)">✓</span> ${name}完成 · ${formatElapsed()}`;
+      } else {
+        addProcessItem(`<span style="color:var(--success)">✓</span> ${name}完成`);
+      }
       break;
     }
     case 'plan': {
@@ -629,7 +643,7 @@ function handleWSEvent(msg) {
         processBlock.classList.remove('expanded');
         const titleEl = processBlock.querySelector('.thinking-title');
         if (titleEl) titleEl.textContent = '已完成';
-        const timerEl = processBlock.querySelector('#timer-display');
+        const timerEl = processBlock.querySelector('.timer-display');
         if (timerEl) timerEl.textContent = formatElapsed();
         const lastLoad = processBlock.querySelector('.loading-wrap');
         if (lastLoad) lastLoad.closest('.thinking-item')?.remove();
