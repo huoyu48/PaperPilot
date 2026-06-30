@@ -210,6 +210,13 @@
   .btn-send svg { width: 16px; height: 16px; fill: var(--bg); }
   .btn-send:hover:not(:disabled) { background: var(--accent); }
   .btn-send:disabled { opacity: 0.3; cursor: not-allowed; }
+  .btn-stop {
+    width: 36px; height: 36px; border-radius: 50%; border: none;
+    background: var(--error); display: none; align-items: center; justify-content: center;
+    cursor: pointer; transition: all 0.15s; flex-shrink: 0;
+  }
+  .btn-stop svg { width: 14px; height: 14px; fill: white; }
+  .btn-stop:hover { opacity: 0.8; }
 
   /* Thinking block (collapsible) */
   .thinking-block {
@@ -382,6 +389,9 @@
       <button id="research-btn" class="btn-send" onclick="startResearch()">
         <svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
       </button>
+      <button id="stop-btn" class="btn-stop" onclick="stopResearch()">
+        <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+      </button>
     </div>
   </div>
 </div>
@@ -499,7 +509,8 @@ function startResearch() {
   const query = input.value.trim();
   if (!query) return;
   input.value = '';
-  document.getElementById('research-btn').disabled = true;
+  document.getElementById('research-btn').style.display = 'none';
+  document.getElementById('stop-btn').style.display = 'flex';
   const welcome = document.querySelector('.welcome-card');
   if (welcome) welcome.remove();
 
@@ -524,6 +535,25 @@ function startResearch() {
   ws.onmessage = (e) => handleWSEvent(JSON.parse(e.data));
   ws.onerror = () => { addMessage('assistant', 'WebSocket 连接失败，切换到 HTTP 模式...'); fallbackHTTP(payload); };
   ws.onclose = () => { ws = null; };
+}
+
+function stopResearch() {
+  if (ws) { ws.close(); ws = null; }
+  stopTimer();
+  document.getElementById('research-btn').style.display = 'flex';
+  document.getElementById('stop-btn').style.display = 'none';
+  document.getElementById('research-btn').disabled = false;
+  if (processBlock) {
+    processBlock.classList.remove('expanded');
+    const titleEl = processBlock.querySelector('.thinking-title');
+    if (titleEl) titleEl.textContent = '已停止';
+    const lastLoad = processBlock.querySelector('.loading-wrap');
+    if (lastLoad) lastLoad.closest('.thinking-item')?.remove();
+  }
+  addMessage('assistant', '<span style="color:var(--error)">研究已停止</span>', false);
+  processBlock = null;
+  streamingEl = null;
+  streamingReport = '';
 }
 
 // ─── WebSocket Events ──────────────────────
@@ -591,6 +621,8 @@ function handleWSEvent(msg) {
     case 'done':
       stopTimer();
       completeAllSteps();
+      document.getElementById('research-btn').style.display = 'flex';
+      document.getElementById('stop-btn').style.display = 'none';
       document.getElementById('research-btn').disabled = false;
       // Collapse the thinking block
       if (processBlock) {
@@ -625,9 +657,11 @@ function handleWSEvent(msg) {
       break;
     case 'error':
       stopTimer();
+      document.getElementById('research-btn').style.display = 'flex';
+      document.getElementById('stop-btn').style.display = 'none';
+      document.getElementById('research-btn').disabled = false;
       if (processBlock) processBlock.classList.remove('expanded');
       addMessage('assistant', `<span style="color:var(--error)">错误：${msg.data}</span>`);
-      document.getElementById('research-btn').disabled = false;
       processBlock = null;
       break;
   }
@@ -657,6 +691,8 @@ async function fallbackHTTP(payload) {
     stopTimer();
     addMessage('assistant', `<span style="color:var(--error)">请求失败：${err.message}</span>`);
   }
+  document.getElementById('research-btn').style.display = 'flex';
+  document.getElementById('stop-btn').style.display = 'none';
   document.getElementById('research-btn').disabled = false;
 }
 
