@@ -211,6 +211,32 @@
   .btn-send:hover:not(:disabled) { background: var(--accent); }
   .btn-send:disabled { opacity: 0.3; cursor: not-allowed; }
 
+  /* Thinking block (collapsible) */
+  .thinking-block {
+    border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+    margin-top: 4px;
+  }
+  .thinking-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 14px; cursor: pointer; user-select: none;
+    transition: background 0.15s;
+  }
+  .thinking-header:hover { background: var(--bg-hover); }
+  .thinking-chevron {
+    width: 14px; height: 14px; stroke: var(--text-muted); fill: none; stroke-width: 2;
+    transition: transform 0.2s; flex-shrink: 0;
+  }
+  .thinking-block.expanded .thinking-chevron { transform: rotate(90deg); }
+  .thinking-title { font-size: 13px; font-weight: 500; color: var(--text-secondary); }
+  .thinking-count { font-size: 11px; color: var(--text-muted); font-family: var(--mono); }
+  .thinking-body { display: none; padding: 0 14px 12px; }
+  .thinking-block.expanded .thinking-body { display: block; }
+  .thinking-body .thinking-item {
+    padding: 6px 0; font-size: 13px; line-height: 1.6; color: var(--text-secondary);
+    border-top: 1px solid var(--border);
+  }
+  .thinking-body .thinking-item:first-child { border-top: none; }
+
   /* Report */
   .report-content { line-height: 1.8; }
   .report-content h1 { font-size: 22px; margin: 24px 0 12px; font-weight: 700; color: var(--text); }
@@ -371,9 +397,38 @@ let timerStart = 0;
 let conversationHistory = [];
 let lastReportText = '';
 let turnAnchors = [];
+let processBlock = null;
+let processStepCount = 0;
 
 const USER_AV = '<svg viewBox="0 0 24 24"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>';
 const AI_AV = '<svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>';
+const CHEVRON_SVG = '<svg class="thinking-chevron" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>';
+
+function ensureProcessBlock() {
+  if (processBlock) return processBlock;
+  const chat = document.getElementById('chat-area');
+  const msgDiv = document.createElement('div');
+  msgDiv.className = 'message assistant';
+  const avatar = AI_AV;
+  msgDiv.innerHTML = `<div class="msg-role"><div class="msg-role-icon">${avatar}</div><span class="msg-role-name">PaperPilot</span></div><div class="bubble"><div class="thinking-block expanded"><div class="thinking-header" onclick="this.parentElement.classList.toggle('expanded')">${CHEVRON_SVG}<span class="thinking-title">思考中...</span><span class="thinking-count">0 步</span></div><div class="thinking-body"></div></div></div>`;
+  chat.appendChild(msgDiv);
+  processBlock = msgDiv.querySelector('.thinking-block');
+  processStepCount = 0;
+  return processBlock;
+}
+
+function addProcessItem(html) {
+  const block = ensureProcessBlock();
+  const body = block.querySelector('.thinking-body');
+  const item = document.createElement('div');
+  item.className = 'thinking-item';
+  item.innerHTML = html;
+  body.appendChild(item);
+  processStepCount++;
+  block.querySelector('.thinking-count').textContent = `${processStepCount} 步`;
+  const chat = document.getElementById('chat-area');
+  chat.scrollTop = chat.scrollHeight;
+}
 
 // ─── Chat Navigation ──────────────────────
 let tooltipTimer = null;
@@ -452,9 +507,11 @@ function startResearch() {
   addNavDot(query, document.querySelector('.message.user:last-child'));
   conversationHistory.push({ role: 'user', content: query });
 
+  processBlock = null;
+  processStepCount = 0;
   resetSteps();
   startTimer();
-  addMessage('assistant', `<div class="loading-wrap"><div class="loading-dots"><span></span><span></span><span></span></div><span>正在启动研究流程...</span><span id="timer-display" class="timer-display">0秒</span></div>`);
+  addProcessItem(`<div class="loading-wrap"><div class="loading-dots"><span></span><span></span><span></span></div><span>正在启动研究流程...</span><span id="timer-display" class="timer-display">0秒</span></div>`);
 
   const payload = { query, conversation_history: conversationHistory };
   if (currentSessionId) payload.session_id = currentSessionId;
@@ -475,29 +532,49 @@ function handleWSEvent(msg) {
       currentSessionId = msg.data.session_id;
       break;
     case 'node_start': {
-      const last = chat.querySelector('.message.assistant:last-child .bubble');
       const html = `<div class="loading-wrap"><div class="loading-dots"><span></span><span></span><span></span></div><span>${msg.data.message}</span><span id="timer-display" class="timer-display">${formatElapsed()}</span></div>`;
-      if (last && last.querySelector('.loading-wrap')) { last.innerHTML = html; }
-      else addMessage('assistant', html);
+      // Update last item if it's a loading item, otherwise add new
+      const body = processBlock?.querySelector('.thinking-body');
+      const lastItem = body?.querySelector('.thinking-item:last-child');
+      if (lastItem && lastItem.querySelector('.loading-wrap')) {
+        lastItem.innerHTML = html;
+      } else {
+        addProcessItem(html);
+      }
       break;
     }
-    case 'node_complete':
+    case 'node_complete': {
       activateStep(msg.data.node);
+      const stepNames = { planner: '规划', researcher: '研究', synthesizer: '综合', writer: '撰写', reviewer: '审核' };
+      const name = stepNames[msg.data.node] || msg.data.node;
+      addProcessItem(`<span style="color:var(--success)">✓</span> ${name}完成`);
       break;
+    }
     case 'plan': {
       const tags = msg.data.map(sq =>
         `<span class="sub-query-tag">${sq.tool}: ${sq.question.substring(0, 50)}</span>`
       ).join('');
-      addMessage('assistant', `<strong>研究计划</strong><div class="sub-queries">${tags}</div>`);
+      addProcessItem(`<strong>研究计划</strong><div class="sub-queries">${tags}</div>`);
       break;
     }
     case 'results':
-      addMessage('assistant', `已收集 <strong>${msg.data.count}</strong> 条研究结果`);
+      addProcessItem(`已收集 <strong>${msg.data.count}</strong> 条研究结果`);
       break;
     case 'done':
       stopTimer();
       completeAllSteps();
       document.getElementById('research-btn').disabled = false;
+      // Collapse the thinking block
+      if (processBlock) {
+        processBlock.classList.remove('expanded');
+        const titleEl = processBlock.querySelector('.thinking-title');
+        if (titleEl) titleEl.textContent = '已完成';
+        const timerEl = processBlock.querySelector('#timer-display');
+        if (timerEl) timerEl.textContent = formatElapsed();
+        // Remove loading dots from last item
+        const lastLoad = processBlock.querySelector('.loading-wrap');
+        if (lastLoad) lastLoad.closest('.thinking-item')?.remove();
+      }
       if (msg.data.report) {
         conversationHistory.push({ role: 'assistant', content: '', report: msg.data.report });
         lastReportText = msg.data.report;
@@ -508,11 +585,14 @@ function handleWSEvent(msg) {
       }
       currentSessionId = msg.data.session_id;
       loadHistory();
+      processBlock = null;
       break;
     case 'error':
       stopTimer();
+      if (processBlock) processBlock.classList.remove('expanded');
       addMessage('assistant', `<span style="color:var(--error)">错误：${msg.data}</span>`);
       document.getElementById('research-btn').disabled = false;
+      processBlock = null;
       break;
   }
   if (msg.event !== 'done') {
@@ -584,10 +664,14 @@ async function loadSession(id) {
     addMessage('user', s.query);
     addNavDot(s.query, document.querySelector('.message.user:last-child'));
     if (s.sub_queries && s.sub_queries.length) {
+      processBlock = null;
+      processStepCount = 0;
       const tags = s.sub_queries.map(sq =>
         `<span class="sub-query-tag executed">${sq.tool}: ${sq.question.substring(0,50)}</span>`
       ).join('');
-      addMessage('assistant', `<strong>研究计划</strong><div class="sub-queries">${tags}</div>`);
+      addProcessItem(`<strong>研究计划</strong><div class="sub-queries">${tags}</div>`);
+      if (processBlock) processBlock.classList.remove('expanded');
+      processBlock = null;
     }
     if (s.report) showReport(s.report);
 
@@ -621,6 +705,8 @@ function newResearch() {
   currentSessionId = null;
   conversationHistory = [];
   lastReportText = '';
+  processBlock = null;
+  processStepCount = 0;
   clearNav();
   const chat = document.getElementById('chat-area');
   chat.innerHTML = `
