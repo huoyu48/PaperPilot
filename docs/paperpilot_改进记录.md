@@ -338,3 +338,74 @@ def writer_node(state):
 | `src/tools/arxiv_tool.py` | `delay_seconds` 1.0→0.05、`max_results` 5→3 |
 | `src/utils/config.py` | `search_max_results` 5→3 |
 | `src/frontend/index.html` | `conversationHistory` 数组追踪、请求携带历史、报告滚到顶部、`loadSession` 重建历史、`newResearch` 清空历史、对话导航圆点 + 固定定位 tooltip、浅色系极简 UI（三轮重构）、折叠思考块、`report_chunk` 渐进式 Markdown 渲染（`requestAnimationFrame` 节流）、4 步 pipeline（移除综合步骤） |
+
+---
+
+### 问题 9：检索工具大面积失败导致研究流程卡死（网络环境适配）
+
+**现象**：用户反馈"搜索资料很慢"，日志显示检索阶段耗时 3 分钟以上，其中 web_search 子查询每次都卡满 30 秒超时才返回，arxiv 全部返回 301 错误，RAG 检索报 "Cannot send a request, as the client has been closed"。
+
+**根因分析**（三个独立问题叠加）：
+
+1. **DuckDuckGo 搜索引擎不可达**：`web_search_tool.py` 依赖的 DuckDuckGo 在用户网络环境下连接超时（20s 无响应）。Jina Reader 和 Google 同样不可达。百度对 httpx 返回安全验证页（CAPTCHA），Bing 对中文查询处理异常（把中文句子拆成单字匹配）。`duckduckgo_search` 库也未安装（`pip install -e .` 被取消），走了 httpx fallback 但 fallback 端点同样连不上。
+
+2. **ArXiv API HTTP→HTTPS 重定向未跟随**：`arxiv_tool.py` 用的是 `http://export.arxiv.org/api/query`，ArXiv 现在强制 301 重定向到 `https://`，但 httpx 默认不跟随重定向，导致所有 arxiv 查询直接失败，返回 0 结果。
+
+3. **ChromaDB 客户端线程安全问题**：`ResearchVectorStore` 每次实例化都创建新的 Chroma 客户端。在 `ThreadPoolExecutor` 并行检索场景下，父线程的客户端被垃圾回收关闭，子线程使用时报 "client has been closed"。此外本地 HuggingFace embedding 模型（`BAAI/bge-small-zh-v1.5`）首次加载需要约 90 秒。
+
+**修复**：
+
+1. **`src/tools/web_search_tool.py`** — 完全重写，从 DuckDuckGo 切换到**搜狗搜索（Sogou）**：
+   - 搜狗对 httpx 友好，不触发反爬验证
+   - 中英文查询都能正确理解（不像 Bing 拆字）
+   - 响应时间从 20-30 秒超时降到 0.5-1.5 秒
+   - 用正则解析 HTML，无额外依赖
+
+2. **`src/tools/arxiv_tool.py`** — URL 改 `https://` + 加 `follow_redirects=True`：
+   ```python
+   ARXIV_API = "https://export.arxiv.org/api/query"  # was http://
+   resp = httpx.get(ARXIV_API, ..., follow_redirects=True)
+   ```
+
+3. **`src/rag/vectorstore.py`** — 改为单例模式，全局共享一个 ChromaDB 客户端：
+   ```python
+   _store: Chroma | None = None
+   _store_lock = threading.Lock()
+
+   def _get_store(collection_name, persist_dir) -> Chroma:
+       global _store
+       if _store is None:
+           with _store_lock:
+               if _store is None:
+                   _store = Chroma(...)
+       return _store
+   ```
+
+4. **`src/agent/researcher.py`** — RAG 检索改用 daemon 线程 + 10 秒硬超时，超时直接跳过不阻塞：
+   ```python
+   t = threading.Thread(target=_do_retrieve, daemon=True)
+   t.start()
+   t.join(timeout=10)
+   if t.is_alive():
+       return []  # 超时跳过，不阻塞 pipeline
+   ```
+   同时整体超时从 30s 降到 20s。
+
+5. **`src/backend/app.py`** — 启动时在后台 daemon 线程预热向量库，不阻塞服务启动：
+   ```python
+   def _warmup():
+       from src.rag.vectorstore import _get_store
+       _get_store("paperpilot_research", cfg.chroma_path)
+
+   threading.Thread(target=_warmup, daemon=True).start()
+   ```
+
+**效果**：
+
+| 工具 | 修复前 | 修复后 |
+|------|--------|--------|
+| Arxiv | 失败（301 重定向） | 0.3-1.8s，3 篇论文 |
+| WebSearch | 20-30s 超时，0 结果 | 0.5-1.5s，3 条结果 |
+| RAG | 90s 卡死或 "client closed" 错误 | 10s 超时保护；启动后后台预热 |
+
+**涉及文件**：`src/tools/web_search_tool.py`, `src/tools/arxiv_tool.py`, `src/rag/vectorstore.py`, `src/agent/researcher.py`, `src/backend/app.py`

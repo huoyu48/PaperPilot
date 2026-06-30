@@ -23,6 +23,22 @@ async def lifespan(app: FastAPI):
     for d in ["data/chroma", "data/memory", "data/uploads", "data/reports"]:
         Path(d).mkdir(parents=True, exist_ok=True)
 
+    # Warm up the vector store + embedding model in a background thread.
+    # The local HuggingFace model takes ~90s to load on first use; doing it
+    # at startup means the first research request is fast. We run it in a
+    # daemon thread so the server is immediately ready to serve.
+    import threading
+
+    def _warmup():
+        try:
+            from src.rag.vectorstore import _get_store
+            _get_store("paperpilot_research", cfg.chroma_path)
+            logger.info("VectorStore: warmed up (background)")
+        except Exception as exc:
+            logger.warning(f"VectorStore warm-up failed: {exc}")
+
+    threading.Thread(target=_warmup, daemon=True).start()
+
     logger.info(f"PaperPilot ready — http://{cfg.host}:{cfg.port}")
     yield
     logger.info("PaperPilot shutting down")

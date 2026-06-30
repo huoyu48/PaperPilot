@@ -22,23 +22,46 @@ _TOOLS = {
 
 
 def _search_local_docs(query: str, top_k: int = 5) -> list[dict]:
-    """Query the local RAG store for uploaded documents."""
+    """Query the local RAG store for uploaded documents.
+
+    Wrapped in a hard 10s timeout — RAG should never block the pipeline.
+    Uses a daemon thread so a stuck retrieval doesn't block process exit.
+    """
+    import concurrent.futures
+    import threading
+
+    result_holder: list[list[dict]] = []
+
+    def _do_retrieve() -> None:
+        try:
+            retriever = ResearchRetriever()
+            docs = retriever.retrieve(query, top_k=top_k)
+            if not docs:
+                logger.info("RAG: no local documents found")
+                result_holder.append([])
+                return
+            results = []
+            for i, doc in enumerate(docs):
+                results.append({
+                    "title": doc.metadata.get("source", f"上传文档 #{i+1}"),
+                    "content": doc.page_content[:1500],
+                    "url": "",
+                    "relevance": 0.9,
+                })
+            logger.info(f"RAG: retrieved {len(results)} local chunks")
+            result_holder.append(results)
+        except Exception as exc:
+            logger.warning(f"RAG retrieval failed: {exc}")
+            result_holder.append([])
+
     try:
-        retriever = ResearchRetriever()
-        docs = retriever.retrieve(query, top_k=top_k)
-        if not docs:
-            logger.info("RAG: no local documents found")
+        t = threading.Thread(target=_do_retrieve, daemon=True)
+        t.start()
+        t.join(timeout=10)
+        if t.is_alive():
+            logger.warning("RAG retrieval timed out (10s), skipping")
             return []
-        results = []
-        for i, doc in enumerate(docs):
-            results.append({
-                "title": doc.metadata.get("source", f"上传文档 #{i+1}"),
-                "content": doc.page_content[:1500],
-                "url": "",
-                "relevance": 0.9,
-            })
-        logger.info(f"RAG: retrieved {len(results)} local chunks")
-        return results
+        return result_holder[0] if result_holder else []
     except Exception as exc:
         logger.warning(f"RAG retrieval failed: {exc}")
         return []
@@ -122,12 +145,14 @@ def researcher_node(state: AgentState) -> dict:
                     relevance=item["relevance"],
                 ))
 
-    # Execute sub-queries in parallel with 30s hard timeout
+    # Execute sub-queries in parallel with 20s hard timeout (was 30s).
+    # Tools have their own per-call timeouts (6s for web, 10s for arxiv/github),
+    # so 20s gives enough headroom while not blocking the pipeline too long.
     if pending:
         pool = ThreadPoolExecutor(max_workers=min(len(pending), 5))
         future_to_sq = {pool.submit(_execute_single, sq): sq for sq in pending}
         done, not_done = concurrent.futures.wait(
-            future_to_sq.keys(), timeout=30, return_when=concurrent.futures.ALL_COMPLETED,
+            future_to_sq.keys(), timeout=20, return_when=concurrent.futures.ALL_COMPLETED,
         )
         for future in done:
             sq = future_to_sq[future]
@@ -144,10 +169,10 @@ def researcher_node(state: AgentState) -> dict:
         # Handle timed-out futures
         for future in not_done:
             sq = future_to_sq[future]
-            logger.warning(f"Tool {sq['tool']} timed out (30s) for '{sq['question'][:60]}'")
+            logger.warning(f"Tool {sq['tool']} timed out (20s) for '{sq['question'][:60]}'")
             all_results.append(ResearchResult(
                 sub_query_id=sq["id"], tool=sq["tool"],
-                title="TIMEOUT", content=f"搜索超时(30秒)", url="", relevance=0.0,
+                title="TIMEOUT", content=f"搜索超时(20秒)", url="", relevance=0.0,
             ))
             sq["status"] = "failed"
         pool.shutdown(wait=False, cancel_futures=True)

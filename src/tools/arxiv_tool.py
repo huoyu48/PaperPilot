@@ -8,7 +8,7 @@ from xml.etree import ElementTree
 
 from src.utils.logging import logger
 
-ARXIV_API = "http://export.arxiv.org/api/query"
+ARXIV_API = "https://export.arxiv.org/api/query"
 ATOM_NS = "{http://www.w3.org/2005/Atom}"
 
 
@@ -32,6 +32,7 @@ class ArxivSearchTool(BaseTool):
                 },
                 timeout=self.timeout,
                 headers={"User-Agent": "PaperPilot/1.0"},
+                follow_redirects=True,
             )
             resp.raise_for_status()
 
