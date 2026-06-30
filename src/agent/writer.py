@@ -1,4 +1,9 @@
-"""Writer node: cross-source analysis + report generation in one LLM call."""
+"""Writer node: cross-source analysis + report generation in one LLM call.
+
+Supports streaming output: when a stream callback is registered (by the WebSocket
+handler), the writer uses llm.stream() and sends partial chunks to the frontend
+in real-time, so the user sees the report being written instead of waiting.
+"""
 
 from __future__ import annotations
 
@@ -9,17 +14,20 @@ from src.llm.client import create_llm
 from src.utils.config import get_config
 from src.utils.logging import logger
 
+# Module-level callback — set by WebSocket handler to enable streaming
+_stream_callback = None
+
+
+def set_stream_callback(cb):
+    """Register a callback(chunk_text: str) to receive streamed report chunks."""
+    global _stream_callback
+    _stream_callback = cb
+
+
 SYSTEM_PROMPT = """\
 You are an expert research analyst and report writer. Given a research question and \
 a collection of source evidence, first synthesize the findings across sources, then \
 produce a professional Markdown research report.
-
-## Synthesis Phase (internal — think before writing)
-
-1. Identify 3-5 major themes across sources
-2. Find converging evidence where multiple sources agree
-3. Note contradictions and gaps
-4. Assess source quality and relevance
 
 ## Report Structure
 
@@ -37,17 +45,14 @@ Use numbered inline citations [1], [2], etc. Every factual claim MUST be cited.
 
 - Include specific numbers, dates, and technical details from sources
 - Never hedge without evidence ("it is believed" → cite who believes it)
-- If sources have gaps, explicitly state them in Discussion
-- Keep the report between 1500-3000 words
+- Keep the report between 1500-2500 words
 - Write in the SAME language as the user's question
 
 ## Follow-up / Conversation Context
 
 If CONVERSATION HISTORY is provided, this is a follow-up in an ongoing research session.
-- If the user asks for a different language (e.g. "中文版", "用中文", "in Chinese"), \
-  rewrite the report in that language while preserving all content and citations.
-- If the user asks to expand on a section, focus the report on that section with more detail.
-- If the user asks a new but related question, write a full report on the new question.
+- If the user asks for a different language (e.g. "中文版", "用中文"), rewrite in that language.
+- If the user asks to expand on a section, focus the report on that section.
 - Always write in the same language as the user's latest question.
 """
 
@@ -90,14 +95,29 @@ def writer_node(state: AgentState) -> dict:
     if history:
         prompt = f"## CONVERSATION HISTORY\n{history}\n\n---\n\n{prompt}"
 
-    response = llm.invoke([
+    messages = [
         SystemMessage(content=SYSTEM_PROMPT),
         ("human", prompt),
-    ])
+    ]
 
-    logger.info("Writer: report generated")
-    return {
-        "synthesis": "(integrated into report)",
-        "report": response.content,
-        "messages": [response],
-    }
+    # Use streaming if a callback is registered, otherwise blocking invoke
+    if _stream_callback:
+        full_text = ""
+        for chunk in llm.stream(messages):
+            full_text += chunk.content
+            if chunk.content:
+                _stream_callback(chunk.content)
+        logger.info("Writer: report generated (streamed)")
+        return {
+            "synthesis": "(integrated into report)",
+            "report": full_text,
+            "messages": [],
+        }
+    else:
+        response = llm.invoke(messages)
+        logger.info("Writer: report generated")
+        return {
+            "synthesis": "(integrated into report)",
+            "report": response.content,
+            "messages": [response],
+        }

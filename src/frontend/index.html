@@ -397,6 +397,8 @@ let lastReportText = '';
 let turnAnchors = [];
 let processBlock = null;
 let processStepCount = 0;
+let streamingReport = '';
+let streamingEl = null;
 
 const USER_AV = '<svg viewBox="0 0 24 24"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>';
 const AI_AV = '<svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>';
@@ -507,6 +509,8 @@ function startResearch() {
 
   processBlock = null;
   processStepCount = 0;
+  streamingEl = null;
+  streamingReport = '';
   resetSteps();
   startTimer();
   addProcessItem(`<div class="loading-wrap"><div class="loading-dots"><span></span><span></span><span></span></div><span>正在启动研究流程...</span><span id="timer-display" class="timer-display">0秒</span></div>`);
@@ -558,6 +562,32 @@ function handleWSEvent(msg) {
     case 'results':
       addProcessItem(`已收集 <strong>${msg.data.count}</strong> 条研究结果`);
       break;
+    case 'report_chunk': {
+      // First chunk: collapse thinking block and create report area
+      if (!streamingEl) {
+        if (processBlock) {
+          processBlock.classList.remove('expanded');
+          const titleEl = processBlock.querySelector('.thinking-title');
+          if (titleEl) titleEl.textContent = '已完成';
+          const lastLoad = processBlock.querySelector('.loading-wrap');
+          if (lastLoad) lastLoad.closest('.thinking-item')?.remove();
+        }
+        streamingReport = '';
+        streamingEl = addMessage('assistant', '<div class="report-content"></div>', false);
+        streamingEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      streamingReport += msg.data;
+      // Throttle re-rendering to avoid lag
+      if (!streamingEl._renderPending) {
+        streamingEl._renderPending = true;
+        requestAnimationFrame(() => {
+          const content = streamingEl.querySelector('.report-content');
+          if (content) content.innerHTML = renderMarkdown(streamingReport);
+          streamingEl._renderPending = false;
+        });
+      }
+      break;
+    }
     case 'done':
       stopTimer();
       completeAllSteps();
@@ -569,14 +599,20 @@ function handleWSEvent(msg) {
         if (titleEl) titleEl.textContent = '已完成';
         const timerEl = processBlock.querySelector('#timer-display');
         if (timerEl) timerEl.textContent = formatElapsed();
-        // Remove loading dots from last item
         const lastLoad = processBlock.querySelector('.loading-wrap');
         if (lastLoad) lastLoad.closest('.thinking-item')?.remove();
       }
       if (msg.data.report) {
         conversationHistory.push({ role: 'assistant', content: '', report: msg.data.report });
         lastReportText = msg.data.report;
-        showReport(msg.data.report);
+        // If streaming was used, finalize render; otherwise showReport
+        if (streamingEl) {
+          const content = streamingEl.querySelector('.report-content');
+          if (content) content.innerHTML = renderMarkdown(msg.data.report);
+          streamingEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } else {
+          showReport(msg.data.report);
+        }
         addMessage('assistant', `<div class="done-card"><svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span>研究完成</span><span class="done-meta">${formatElapsed()} · ${msg.data.report_path}</span></div>`, false);
       } else {
         addMessage('assistant', `<div class="done-card"><svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><span>研究完成 · ${formatElapsed()}</span></div>`);
@@ -584,6 +620,8 @@ function handleWSEvent(msg) {
       currentSessionId = msg.data.session_id;
       loadHistory();
       processBlock = null;
+      streamingEl = null;
+      streamingReport = '';
       break;
     case 'error':
       stopTimer();
@@ -705,6 +743,8 @@ function newResearch() {
   lastReportText = '';
   processBlock = null;
   processStepCount = 0;
+  streamingEl = null;
+  streamingReport = '';
   clearNav();
   const chat = document.getElementById('chat-area');
   chat.innerHTML = `
@@ -758,8 +798,8 @@ function addMessage(role, content, scroll = true) {
   return div;
 }
 
-function showReport(md) {
-  const html = md
+function renderMarkdown(md) {
+  return md
     .replace(/^### (.+)$/gm, '<h3>$1</h3>')
     .replace(/^## (.+)$/gm, '<h2>$1</h2>')
     .replace(/^# (.+)$/gm, '<h1>$1</h1>')
@@ -767,7 +807,10 @@ function showReport(md) {
     .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" target="_blank">$1</a>')
     .replace(/`(.+?)`/g, '<code>$1</code>')
     .replace(/\n/g, '<br>');
-  const el = addMessage('assistant', `<div class="report-content">${html}</div>`, false);
+}
+
+function showReport(md) {
+  const el = addMessage('assistant', `<div class="report-content">${renderMarkdown(md)}</div>`, false);
   el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 

@@ -10,6 +10,7 @@ import uuid
 from fastapi import WebSocket, WebSocketDisconnect
 
 from src.agent.graph import create_agent
+from src.agent.writer import set_stream_callback
 from src.memory.sessions import SessionStore
 from src.report.generator import generate_report_file
 from src.utils.config import get_config
@@ -137,6 +138,13 @@ async def research_websocket(websocket: WebSocket):
         def run_stream():
             nonlocal final_state
             current_node = None
+
+            # Enable writer streaming: push partial chunks to event queue
+            def _on_chunk(text: str):
+                event_queue.put(("report_chunk", text))
+
+            set_stream_callback(_on_chunk)
+
             for event in agent.stream(initial_state, stream_mode="updates"):
                 for node_name, node_output in event.items():
                     # Send node_complete event
@@ -147,8 +155,6 @@ async def research_websocket(websocket: WebSocket):
                         event_queue.put(("plan", node_output["sub_queries"]))
                     if "research_results" in node_output:
                         event_queue.put(("results_count", len(node_output["research_results"])))
-                    if "report" in node_output and node_output["report"]:
-                        event_queue.put(("report", node_output["report"]))
 
                     # Merge output into final state
                     for k, v in node_output.items():
@@ -157,6 +163,7 @@ async def research_websocket(websocket: WebSocket):
                         else:
                             final_state[k] = v
 
+            set_stream_callback(None)
             event_queue.put(("done", None))
 
         # Start stream in thread
@@ -202,8 +209,8 @@ async def research_websocket(websocket: WebSocket):
                 await websocket.send_json({"event": "plan", "data": event_data})
             elif event_type == "results_count":
                 await websocket.send_json({"event": "results", "data": {"count": event_data}})
-            elif event_type == "report":
-                await websocket.send_json({"event": "report", "data": event_data})
+            elif event_type == "report_chunk":
+                await websocket.send_json({"event": "report_chunk", "data": event_data})
             elif event_type == "done":
                 break
 

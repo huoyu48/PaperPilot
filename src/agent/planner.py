@@ -1,4 +1,9 @@
-"""Planner node: decomposes research query into structured sub-queries."""
+"""Planner node: decomposes research query into structured sub-queries.
+
+For simple new queries (no conversation history), uses a fast rule-based approach
+that skips the LLM entirely — planning is instant. Only follow-up questions with
+conversation context use the LLM planner.
+"""
 
 from __future__ import annotations
 
@@ -11,59 +16,79 @@ from src.llm.client import create_llm
 from src.utils.config import get_config
 from src.utils.logging import logger
 
-SYSTEM_PROMPT = """\
-You are a senior research planner. Given a research question, decompose it into \
-3-5 specific sub-queries that together answer the main question.
-
-For each sub-query, choose exactly ONE tool:
-- "arxiv"      — academic paper search (best for theory, methods, surveys)
-- "github"     — code repository search (best for implementations, benchmarks)
-- "web_search" — general web search (best for news, industry trends, product info)
-- "jina_reader" — read a specific URL (use when you have a known URL to scrape)
-- "local_docs" — search user-uploaded documents (use when the question asks about uploaded papers, files, or PDFs)
-
-IMPORTANT: If the user's question mentions "上传的论文", "这篇论文", "上传的文档", "uploaded paper", or similar references to uploaded files, you MUST include at least one sub-query using "local_docs" tool.
-
-## Follow-up Questions
-
-If CONVERSATION HISTORY is provided below, this is a follow-up question in an ongoing session. \
-Pay close attention to what was previously researched and reported.
-
-Follow-up types and how to handle them:
-- **Language/format change** (e.g. "我要中文版", "translate to Chinese", "用中文写"): \
-  Create ONE sub-query using "web_search" with the original topic + "Chinese" keyword. \
-  The writer will rewrite the report in the requested language using existing research.
-- **Deepen a specific aspect** (e.g. "详细讲讲方法论部分"): Create sub-queries focused on that aspect.
-- **New but related question**: Create normal sub-queries as if it were a new research task.
-
-Rules:
-- For arxiv queries about "latest" or "recent" topics, append "2024 OR 2025" to the query string
-- If the user asks about latest trends/news, use web_search more than arxiv
-- Write sub-query questions in the SAME language as the user's input
-- Keep sub-queries specific and focused, not broad
-
-Respond ONLY with a JSON array, no markdown fences:
-[{"id":"q1","question":"...","tool":"arxiv"}, ...]
+# Shortened LLM prompt — only used for follow-up questions
+LLM_PROMPT = """\
+Decompose the research question into 3-4 sub-queries. Tools: arxiv, github, web_search, local_docs.
+If "上传/这篇论文" mentioned, include a local_docs sub-query. Append "2024 2025" to arxiv queries about recent topics.
+For follow-ups: language change → 1 web_search sub-query; deepening → focused sub-queries.
+Reply JSON only: [{"id":"q1","question":"...","tool":"arxiv"}, ...]
 """
 
 
+def _fast_plan(query: str) -> list[SubQuery]:
+    """Rule-based instant planner — no LLM call needed."""
+    q = query.strip()
+    sub_queries: list[SubQuery] = []
+
+    # Detect uploaded-doc references
+    has_upload_ref = any(kw in q for kw in ["上传", "这篇", "文档", "uploaded", "this paper"])
+
+    # Detect code/implementation intent
+    has_code_intent = any(kw in q for kw in ["代码", "实现", "github", "code", "implement", "开源"])
+
+    # Detect latest/trend intent
+    has_latest_intent = any(kw in q for kw in ["最新", "近期", "发展", "动态", "趋势", "latest", "recent", "trend"])
+
+    if has_upload_ref:
+        sub_queries.append(SubQuery(id="q1", question=q, tool="local_docs", status="pending"))
+
+    # ArXiv for academic/survey papers
+    arxiv_q = f"{q} 综述 2024 2025" if has_latest_intent else f"{q} 研究论文"
+    sub_queries.append(SubQuery(id=f"q{len(sub_queries)+1}", question=arxiv_q, tool="arxiv", status="pending"))
+
+    # Web search for latest trends/news
+    if has_latest_intent:
+        web_q = f"{q} 最新进展 2024 2025"
+        sub_queries.append(SubQuery(id=f"q{len(sub_queries)+1}", question=web_q, tool="web_search", status="pending"))
+        sub_queries.append(SubQuery(id=f"q{len(sub_queries)+1}", question=f"{q} 应用案例和行业动态", tool="web_search", status="pending"))
+    else:
+        sub_queries.append(SubQuery(id=f"q{len(sub_queries)+1}", question=f"{q} 概述和应用", tool="web_search", status="pending"))
+
+    # GitHub for code/implementation
+    if has_code_intent:
+        sub_queries.append(SubQuery(id=f"q{len(sub_queries)+1}", question=f"{q} 开源项目 实现", tool="github", status="pending"))
+
+    # Multi-agent / collaboration sub-topic
+    if "agent" in q.lower() or "智能体" in q:
+        sub_queries.append(SubQuery(id=f"q{len(sub_queries)+1}", question=f"{q} 多智能体协作 2024 2025", tool="arxiv", status="pending"))
+
+    # Cap at 4
+    return sub_queries[:4]
+
+
 def planner_node(state: AgentState) -> dict:
+    query = state["query"]
+    history = state.get("conversation_history", "").strip()
+
+    # ── Fast path: no conversation history → rule-based, no LLM call ──
+    if not history:
+        sub_queries = _fast_plan(query)
+        logger.info(f"Planner (fast): generated {len(sub_queries)} sub-queries instantly")
+        return {"sub_queries": sub_queries, "messages": []}
+
+    # ── LLM path: follow-up questions with conversation context ──
     cfg = get_config()
     llm = create_llm(
         cfg.llm_provider, cfg.llm_api_key, cfg.llm_base_url, cfg.llm_model,
         temperature=0.2, max_tokens=256,
     )
 
-    logger.info(f"Planner: decomposing query → {state['query'][:80]}...")
+    logger.info(f"Planner (LLM): follow-up query → {query[:80]}...")
 
-    # Build messages with optional conversation history
-    messages: list = [SystemMessage(content=SYSTEM_PROMPT)]
-
-    history = state.get("conversation_history", "").strip()
-    if history:
-        messages.append(("human", f"CONVERSATION HISTORY:\n{history}\n\n---\n\nNew question: {state['query']}"))
-    else:
-        messages.append(("human", state["query"]))
+    messages: list = [
+        SystemMessage(content=LLM_PROMPT),
+        ("human", f"CONVERSATION HISTORY:\n{history}\n\n---\n\nNew question: {query}"),
+    ]
 
     response = llm.invoke(messages)
 
@@ -73,9 +98,9 @@ def planner_node(state: AgentState) -> dict:
             raw = raw.split("\n", 1)[1].rsplit("```", 1)[0]
         plan = json.loads(raw)
     except (json.JSONDecodeError, IndexError) as exc:
-        logger.error(f"Planner JSON parse failed: {exc}")
+        logger.error(f"Planner JSON parse failed: {exc}, falling back to fast plan")
         return {
-            "sub_queries": [SubQuery(id="q1", question=state["query"], tool="web_search", status="pending")],
+            "sub_queries": _fast_plan(query),
             "messages": [response],
             "errors": state.get("errors", []) + [f"Planner parse error: {exc}"],
         }
@@ -84,7 +109,7 @@ def planner_node(state: AgentState) -> dict:
         SubQuery(id=item["id"], question=item["question"], tool=item["tool"], status="pending")
         for item in plan
     ]
-    logger.info(f"Planner: generated {len(sub_queries)} sub-queries")
+    logger.info(f"Planner (LLM): generated {len(sub_queries)} sub-queries")
 
     return {
         "sub_queries": sub_queries,
