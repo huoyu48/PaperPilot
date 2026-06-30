@@ -19,7 +19,7 @@ class WebSearchTool(BaseTool):
         try:
             from duckduckgo_search import DDGS
 
-            with DDGS() as ddgs:
+            with DDGS(timeout=10) as ddgs:
                 raw = list(ddgs.text(query, max_results=cfg.search_max_results))
 
             results: list[dict] = []

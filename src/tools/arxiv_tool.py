@@ -1,11 +1,15 @@
-"""Arxiv paper search tool."""
+"""Arxiv paper search tool using httpx for timeout control."""
 
 from __future__ import annotations
 
-import arxiv
+import httpx
 from langchain_core.tools import BaseTool
+from xml.etree import ElementTree
 
 from src.utils.logging import logger
+
+ARXIV_API = "http://export.arxiv.org/api/query"
+ATOM_NS = "{http://www.w3.org/2005/Atom}"
 
 
 class ArxivSearchTool(BaseTool):
@@ -13,25 +17,44 @@ class ArxivSearchTool(BaseTool):
     description: str = "Search Arxiv for academic papers. Input: search query. Returns paper metadata and abstracts."
 
     max_results: int = 3
+    timeout: int = 10
 
     def _run(self, query: str) -> list[dict]:
         logger.info(f"Arxiv: searching '{query[:60]}'")
         try:
-            client = arxiv.Client(page_size=self.max_results, delay_seconds=0.05)
-            search = arxiv.Search(
-                query=query,
-                max_results=self.max_results,
-                sort_by=arxiv.SortCriterion.SubmittedDate,
+            resp = httpx.get(
+                ARXIV_API,
+                params={
+                    "search_query": f"all:{query}",
+                    "max_results": self.max_results,
+                    "sortBy": "submittedDate",
+                    "sortOrder": "descending",
+                },
+                timeout=self.timeout,
+                headers={"User-Agent": "PaperPilot/1.0"},
             )
+            resp.raise_for_status()
 
+            root = ElementTree.fromstring(resp.text)
             results: list[dict] = []
-            for paper in client.results(search):
+            for entry in root.findall(f"{ATOM_NS}entry"):
+                title = (entry.findtext(f"{ATOM_NS}title") or "").strip()
+                summary = (entry.findtext(f"{ATOM_NS}summary") or "").strip()
+                url = (entry.findtext(f"{ATOM_NS}id") or "").strip()
+                published = (entry.findtext(f"{ATOM_NS}published") or "")[:10]
+
+                authors: list[str] = []
+                for author in entry.findall(f"{ATOM_NS}author"):
+                    name = author.findtext(f"{ATOM_NS}name")
+                    if name:
+                        authors.append(name.strip())
+
                 results.append({
-                    "title": paper.title,
-                    "content": paper.summary[:600],
-                    "url": paper.entry_id,
-                    "authors": ", ".join(a.name for a in paper.authors[:3]),
-                    "published": str(paper.published.date()),
+                    "title": title,
+                    "content": summary[:600],
+                    "url": url,
+                    "authors": ", ".join(authors[:3]),
+                    "published": published,
                     "relevance": 0.8,
                 })
 
