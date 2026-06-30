@@ -6,211 +6,406 @@
 <title>PaperPilot · AI 科研助手</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  
+
   :root {
-    --bg-primary: #0f172a;
-    --bg-secondary: #1e293b;
-    --bg-tertiary: #334155;
-    --text-primary: #f1f5f9;
-    --text-secondary: #cbd5e1;
-    --text-muted: #94a3b8;
-    --accent: #6366f1;
-    --accent-hover: #4f46e5;
-    --accent-light: #818cf8;
-    --success: #10b981;
-    --error: #ef4444;
-    --border: #334155;
-    --shadow: rgba(0, 0, 0, 0.3);
+    --bg-primary: #060a14;
+    --bg-secondary: rgba(13, 20, 38, 0.85);
+    --bg-tertiary: rgba(22, 33, 62, 0.7);
+    --bg-card: rgba(15, 23, 42, 0.6);
+    --glass: rgba(255, 255, 255, 0.03);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --text-primary: #e8ecf4;
+    --text-secondary: #8b95a8;
+    --text-muted: #556078;
+    --accent: #7c5cfc;
+    --accent-hover: #6a4be0;
+    --accent-light: #a78bfa;
+    --accent-glow: rgba(124, 92, 252, 0.25);
+    --cyan: #22d3ee;
+    --cyan-glow: rgba(34, 211, 238, 0.2);
+    --success: #34d399;
+    --success-glow: rgba(52, 211, 153, 0.2);
+    --error: #f87171;
+    --border: rgba(255, 255, 255, 0.06);
+    --border-light: rgba(255, 255, 255, 0.1);
+    --shadow: rgba(0, 0, 0, 0.5);
+    --font-mono: "SF Mono", "Fira Code", "JetBrains Mono", monospace;
   }
 
   body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
     background: var(--bg-primary);
     color: var(--text-primary);
     height: 100vh;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    -webkit-font-smoothing: antialiased;
   }
 
+  /* Animated background */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 0;
+    background:
+      radial-gradient(ellipse 800px 600px at 15% 20%, rgba(124, 92, 252, 0.08), transparent),
+      radial-gradient(ellipse 600px 500px at 85% 80%, rgba(34, 211, 238, 0.06), transparent),
+      radial-gradient(ellipse 500px 400px at 50% 50%, rgba(124, 92, 252, 0.03), transparent);
+    pointer-events: none;
+  }
+  /* Grid overlay */
+  body::after {
+    content: '';
+    position: fixed; inset: 0; z-index: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+  }
+
+  /* ── Header ─────────────────────────── */
   .header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 24px;
+    position: relative; z-index: 2;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 24px; height: 56px;
     background: var(--bg-secondary);
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--glass-border);
+    backdrop-filter: blur(20px);
   }
-
-  .header-left { display: flex; align-items: center; gap: 12px; }
-  .logo {
-    font-size: 20px; font-weight: 700;
-    background: linear-gradient(135deg, var(--accent-light), var(--accent));
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  .header-left { display: flex; align-items: center; gap: 14px; }
+  .logo-wrap { display: flex; align-items: center; gap: 10px; }
+  .logo-icon {
+    width: 32px; height: 32px; border-radius: 8px;
+    background: linear-gradient(135deg, var(--accent), var(--cyan));
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0 20px var(--accent-glow);
   }
+  .logo-icon svg { width: 18px; height: 18px; fill: white; }
+  .logo-text { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; color: var(--text-primary); }
   .badge {
-    padding: 3px 10px; background: var(--accent); color: white;
-    border-radius: 12px; font-size: 11px; font-weight: 600;
+    padding: 3px 10px; border-radius: 20px; font-size: 10px; font-weight: 600;
+    letter-spacing: 0.5px; text-transform: uppercase;
+    background: linear-gradient(135deg, rgba(124,92,252,0.15), rgba(34,211,238,0.15));
+    border: 1px solid rgba(124,92,252,0.3); color: var(--accent-light);
   }
 
-  .header-right { display: flex; gap: 6px; }
+  /* Pipeline steps */
+  .pipeline { display: flex; align-items: center; gap: 0; }
   .step-badge {
-    padding: 5px 12px; background: var(--bg-tertiary); border: 1px solid var(--border);
-    border-radius: 6px; font-size: 12px; color: var(--text-muted); transition: all 0.3s;
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 14px; font-size: 12px; font-weight: 500;
+    color: var(--text-muted); background: transparent;
+    border: 1px solid var(--glass-border); border-radius: 20px;
+    transition: all 0.4s ease; position: relative; white-space: nowrap;
   }
-  .step-badge.active { background: var(--accent); border-color: var(--accent); color: white; box-shadow: 0 0 12px rgba(99,102,241,0.4); }
-  .step-badge.done { background: var(--success); border-color: var(--success); color: white; }
+  .step-badge svg { width: 14px; height: 14px; opacity: 0.5; transition: all 0.3s; }
+  .step-badge + .step-badge { margin-left: 6px; }
+  .step-badge.active {
+    background: linear-gradient(135deg, rgba(124,92,252,0.2), rgba(34,211,238,0.1));
+    border-color: var(--accent); color: var(--accent-light);
+    box-shadow: 0 0 20px var(--accent-glow), inset 0 0 12px rgba(124,92,252,0.1);
+  }
+  .step-badge.active svg { opacity: 1; fill: var(--accent-light); }
+  .step-badge.done {
+    background: rgba(52, 211, 153, 0.08);
+    border-color: rgba(52, 211, 153, 0.3); color: var(--success);
+  }
+  .step-badge.done svg { opacity: 0.8; fill: var(--success); }
 
-  .main { display: flex; flex: 1; overflow: hidden; }
+  /* ── Main layout ────────────────────── */
+  .main { display: flex; flex: 1; overflow: hidden; position: relative; z-index: 1; }
 
-  /* Sidebar */
+  /* ── Sidebar ────────────────────────── */
   .sidebar {
-    width: 280px; background: var(--bg-secondary); border-right: 1px solid var(--border);
+    width: 280px; flex-shrink: 0;
+    background: var(--bg-secondary);
+    border-right: 1px solid var(--glass-border);
+    backdrop-filter: blur(20px);
     display: flex; flex-direction: column; overflow: hidden;
   }
-  .sidebar-top { padding: 16px 16px 8px; }
-  .sidebar-title-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-  .sidebar-title { font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px; }
-  .btn-new {
-    padding: 4px 10px; background: var(--accent); color: white; border: none;
-    border-radius: 6px; font-size: 11px; cursor: pointer; font-weight: 600;
+  .sidebar-top { padding: 18px 16px 10px; }
+  .sidebar-title-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .sidebar-title {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    color: var(--text-muted); letter-spacing: 1px;
   }
-  .btn-new:hover { background: var(--accent-hover); }
+  .btn-new {
+    padding: 5px 12px; background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+    color: white; border: none; border-radius: 8px; font-size: 11px;
+    cursor: pointer; font-weight: 600; transition: all 0.2s;
+    box-shadow: 0 2px 8px var(--accent-glow);
+  }
+  .btn-new:hover { transform: translateY(-1px); box-shadow: 0 4px 16px var(--accent-glow); }
 
-  .history-list { flex: 1; overflow-y: auto; padding: 0 16px 16px; }
-  .history-empty { color: var(--text-muted); font-size: 13px; text-align: center; padding: 24px 0; }
+  .history-list { flex: 1; overflow-y: auto; padding: 0 12px 12px; }
+  .history-empty { color: var(--text-muted); font-size: 13px; text-align: center; padding: 40px 0; }
 
   .history-item {
-    padding: 10px 12px; background: var(--bg-tertiary); border-radius: 8px;
-    margin-bottom: 6px; cursor: pointer; transition: all 0.15s;
+    padding: 12px 14px; border-radius: 10px; margin-bottom: 4px;
+    cursor: pointer; transition: all 0.2s ease;
     border: 1px solid transparent; position: relative;
+    background: var(--glass);
   }
-  .history-item:hover { border-color: var(--accent); transform: translateX(2px); }
-  .history-item.active { border-color: var(--accent); background: rgba(99,102,241,0.15); }
-  .history-item-title { font-size: 13px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .history-item-meta { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+  .history-item:hover { border-color: var(--border-light); background: rgba(255,255,255,0.04); }
+  .history-item.active {
+    border-color: rgba(124, 92, 252, 0.4);
+    background: linear-gradient(135deg, rgba(124,92,252,0.08), rgba(34,211,238,0.04));
+    box-shadow: 0 0 16px var(--accent-glow);
+  }
+  .history-item-title {
+    font-size: 13px; color: var(--text-primary); font-weight: 500;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .history-item-meta { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
   .history-item .del-btn {
-    position: absolute; top: 8px; right: 8px; width: 20px; height: 20px;
-    background: none; border: none; color: var(--text-muted); cursor: pointer;
-    font-size: 14px; display: none; line-height: 20px; text-align: center; border-radius: 4px;
+    position: absolute; top: 10px; right: 10px; width: 22px; height: 22px;
+    background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.2);
+    color: var(--error); cursor: pointer; font-size: 12px;
+    display: none; line-height: 20px; text-align: center; border-radius: 6px;
+    transition: all 0.15s;
   }
   .history-item:hover .del-btn { display: block; }
-  .history-item .del-btn:hover { background: var(--error); color: white; }
+  .history-item .del-btn:hover { background: var(--error); color: white; border-color: var(--error); }
 
-  .sidebar-bottom { padding: 12px 16px; border-top: 1px solid var(--border); }
+  .sidebar-bottom { padding: 12px; border-top: 1px solid var(--glass-border); }
   .upload-area {
-    padding: 16px; border: 2px dashed var(--border); border-radius: 8px;
-    text-align: center; cursor: pointer; transition: all 0.2s;
+    padding: 20px 16px; border: 1.5px dashed var(--border-light); border-radius: 12px;
+    text-align: center; cursor: pointer; transition: all 0.25s;
+    background: var(--glass);
   }
-  .upload-area:hover { border-color: var(--accent); background: var(--bg-tertiary); }
-  .upload-icon { font-size: 24px; margin-bottom: 4px; opacity: 0.5; }
-  .upload-text { font-size: 12px; color: var(--text-muted); }
-  .upload-formats { font-size: 10px; color: var(--text-muted); opacity: 0.7; }
+  .upload-area:hover { border-color: var(--accent); background: rgba(124,92,252,0.05); }
+  .upload-icon { margin-bottom: 6px; opacity: 0.4; }
+  .upload-icon svg { width: 28px; height: 28px; stroke: var(--text-muted); fill: none; stroke-width: 1.5; }
+  .upload-text { font-size: 12px; color: var(--text-secondary); font-weight: 500; }
+  .upload-formats { font-size: 10px; color: var(--text-muted); margin-top: 4px; letter-spacing: 0.3px; }
 
-  /* Content */
-  .content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  /* ── Content ────────────────────────── */
+  .content { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
 
   .chat-area {
-    flex: 1; overflow-y: auto; padding: 24px;
-    display: flex; flex-direction: column; gap: 12px;
+    flex: 1; overflow-y: auto; padding: 28px 32px;
+    display: flex; flex-direction: column; gap: 16px;
   }
 
-  .message { max-width: 800px; width: 100%; margin: 0 auto; animation: fadeIn 0.3s ease; }
-  @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
-  .message.user { align-self: flex-end; }
-  .message.assistant { align-self: flex-start; }
-  .bubble { padding: 12px 16px; border-radius: 12px; font-size: 14px; line-height: 1.6; }
-  .message.user .bubble { background: var(--accent); color: white; border-bottom-right-radius: 4px; }
-  .message.assistant .bubble { background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+  /* Messages */
+  .message {
+    max-width: 820px; width: 100%; margin: 0 auto;
+    animation: msgIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex; gap: 12px;
+  }
+  @keyframes msgIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+  .message.user { flex-direction: row-reverse; }
+  .msg-avatar {
+    width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700;
+  }
+  .message.user .msg-avatar {
+    background: linear-gradient(135deg, var(--accent), #9333ea);
+    box-shadow: 0 2px 10px var(--accent-glow);
+  }
+  .message.user .msg-avatar svg { width: 16px; height: 16px; fill: white; }
+  .message.assistant .msg-avatar {
+    background: linear-gradient(135deg, rgba(34,211,238,0.15), rgba(124,92,252,0.15));
+    border: 1px solid rgba(34,211,238,0.2);
+  }
+  .message.assistant .msg-avatar svg { width: 18px; height: 18px; fill: var(--cyan); }
+
+  .bubble {
+    padding: 14px 18px; border-radius: 16px; font-size: 14px; line-height: 1.7;
+    max-width: calc(100% - 46px); word-wrap: break-word;
+  }
+  .message.user .bubble {
+    background: linear-gradient(135deg, var(--accent), #6d28d9);
+    color: white; border-bottom-right-radius: 4px;
+    box-shadow: 0 4px 16px var(--accent-glow);
+  }
+  .message.assistant .bubble {
+    background: var(--bg-card);
+    border: 1px solid var(--glass-border);
+    backdrop-filter: blur(12px);
+    color: var(--text-primary); border-bottom-left-radius: 4px;
+  }
 
   .followup-badge {
-    display: inline-block; padding: 2px 8px; background: var(--bg-tertiary);
-    border-radius: 4px; font-size: 11px; color: var(--text-muted); margin-bottom: 6px;
+    display: inline-block; padding: 2px 8px;
+    background: linear-gradient(135deg, rgba(34,211,238,0.12), rgba(124,92,252,0.12));
+    border: 1px solid rgba(34,211,238,0.2);
+    border-radius: 6px; font-size: 10px; font-weight: 600;
+    color: var(--cyan); margin-bottom: 8px; letter-spacing: 0.3px;
   }
 
+  /* Welcome */
   .welcome-card {
-    max-width: 560px; margin: 60px auto 0; padding: 36px;
-    background: linear-gradient(135deg, var(--bg-secondary), var(--bg-tertiary));
-    border: 1px solid var(--border); border-radius: 16px; text-align: center;
-    box-shadow: 0 8px 24px var(--shadow);
+    max-width: 620px; margin: 48px auto 0; padding: 44px 40px;
+    background: var(--bg-card); border: 1px solid var(--glass-border);
+    border-radius: 20px; text-align: center;
+    backdrop-filter: blur(16px);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3), 0 0 40px var(--accent-glow);
+    animation: welcomeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1);
   }
+  @keyframes welcomeIn { from { opacity: 0; transform: translateY(24px) scale(0.96); } to { opacity: 1; transform: none; } }
+
+  .welcome-icon {
+    width: 64px; height: 64px; margin: 0 auto 20px; border-radius: 18px;
+    background: linear-gradient(135deg, var(--accent), var(--cyan));
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 8px 32px var(--accent-glow);
+  }
+  .welcome-icon svg { width: 32px; height: 32px; fill: white; }
   .welcome-title {
-    font-size: 26px; font-weight: 700; margin-bottom: 12px;
-    background: linear-gradient(135deg, var(--accent-light), var(--text-primary));
+    font-size: 28px; font-weight: 700; margin-bottom: 10px;
+    background: linear-gradient(135deg, var(--text-primary), var(--accent-light));
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
   }
-  .welcome-text { font-size: 14px; color: var(--text-secondary); line-height: 1.7; }
+  .welcome-sub { font-size: 14px; color: var(--text-secondary); line-height: 1.7; margin-bottom: 28px; }
+  .feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .feature-item {
+    padding: 16px 12px; border-radius: 12px; text-align: center;
+    background: var(--glass); border: 1px solid var(--glass-border);
+    transition: all 0.2s;
+  }
+  .feature-item:hover { border-color: var(--border-light); background: rgba(255,255,255,0.04); }
+  .feature-icon { font-size: 22px; margin-bottom: 8px; }
+  .feature-label { font-size: 12px; color: var(--text-secondary); font-weight: 500; }
 
+  /* Session header */
   .session-header {
-    max-width: 800px; width: 100%; margin: 0 auto 8px; padding: 12px 16px;
-    background: var(--bg-secondary); border: 1px solid var(--border);
-    border-radius: 10px; display: flex; align-items: center; justify-content: space-between;
+    max-width: 820px; width: 100%; margin: 0 auto 4px; padding: 14px 18px;
+    background: var(--bg-card); border: 1px solid var(--glass-border);
+    border-radius: 12px; display: flex; align-items: center; justify-content: space-between;
+    backdrop-filter: blur(12px);
   }
-  .session-header-query { font-weight: 600; font-size: 14px; }
-  .session-header-meta { font-size: 11px; color: var(--text-muted); }
+  .session-header-query { font-weight: 600; font-size: 14px; color: var(--text-primary); }
+  .session-header-meta { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); }
 
-  .input-area { padding: 16px 24px; background: var(--bg-secondary); border-top: 1px solid var(--border); }
-  .input-wrap { max-width: 800px; margin: 0 auto; display: flex; gap: 10px; }
-  .input-field {
-    flex: 1; padding: 12px 16px; background: var(--bg-primary); border: 2px solid var(--border);
-    border-radius: 10px; color: var(--text-primary); font-size: 14px; outline: none; transition: all 0.2s;
+  /* ── Input ──────────────────────────── */
+  .input-area {
+    padding: 16px 32px 20px; position: relative;
+    background: linear-gradient(to top, var(--bg-primary) 60%, transparent);
   }
-  .input-field:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+  .input-wrap {
+    max-width: 820px; margin: 0 auto; display: flex; gap: 10px;
+    background: var(--bg-card); border: 1px solid var(--glass-border);
+    border-radius: 14px; padding: 6px 6px 6px 18px;
+    backdrop-filter: blur(16px); transition: all 0.2s;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+  }
+  .input-wrap:focus-within {
+    border-color: rgba(124,92,252,0.4);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2), 0 0 20px var(--accent-glow);
+  }
+  .input-field {
+    flex: 1; padding: 10px 0; background: transparent; border: none;
+    color: var(--text-primary); font-size: 14px; outline: none;
+    font-family: inherit;
+  }
   .input-field::placeholder { color: var(--text-muted); }
   .btn-primary {
-    padding: 12px 24px; background: var(--accent); color: white; border: none;
-    border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; white-space: nowrap;
+    padding: 10px 22px; background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+    color: white; border: none; border-radius: 10px;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    transition: all 0.2s; white-space: nowrap;
+    box-shadow: 0 2px 10px var(--accent-glow);
+    display: flex; align-items: center; gap: 6px;
   }
-  .btn-primary:hover:not(:disabled) { background: var(--accent-hover); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(99,102,241,0.3); }
-  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-primary svg { width: 16px; height: 16px; fill: white; }
+  .btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 20px var(--accent-glow); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
 
-  .report-content { line-height: 1.8; }
-  .report-content h1 { font-size: 22px; margin: 20px 0 12px; color: var(--accent-light); }
-  .report-content h2 { font-size: 18px; margin: 16px 0 10px; color: var(--text-primary); }
-  .report-content h3 { font-size: 15px; margin: 14px 0 6px; color: var(--text-primary); }
+  /* ── Report ─────────────────────────── */
+  .report-content { line-height: 1.85; }
+  .report-content h1 {
+    font-size: 22px; margin: 24px 0 14px; font-weight: 700;
+    background: linear-gradient(135deg, var(--accent-light), var(--cyan));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .report-content h2 {
+    font-size: 17px; margin: 20px 0 10px; font-weight: 600;
+    color: var(--text-primary); padding-bottom: 6px;
+    border-bottom: 1px solid var(--glass-border);
+  }
+  .report-content h3 { font-size: 15px; margin: 16px 0 8px; font-weight: 600; color: var(--text-primary); }
   .report-content p { margin: 10px 0; color: var(--text-secondary); }
   .report-content ul, .report-content ol { margin: 10px 0; padding-left: 24px; }
-  .report-content li { margin: 4px 0; color: var(--text-secondary); }
+  .report-content li { margin: 5px 0; color: var(--text-secondary); }
   .report-content strong { color: var(--text-primary); font-weight: 600; }
-  .report-content a { color: var(--accent-light); text-decoration: none; }
-  .report-content a:hover { text-decoration: underline; }
-  .report-content code { background: var(--bg-primary); padding: 2px 6px; border-radius: 4px; font-family: "SF Mono","Fira Code",monospace; font-size: 13px; }
+  .report-content a { color: var(--cyan); text-decoration: none; border-bottom: 1px dashed rgba(34,211,238,0.3); }
+  .report-content a:hover { border-bottom-color: var(--cyan); }
+  .report-content code {
+    background: rgba(124,92,252,0.1); padding: 2px 7px; border-radius: 5px;
+    font-family: var(--font-mono); font-size: 13px; color: var(--accent-light);
+    border: 1px solid rgba(124,92,252,0.15);
+  }
 
-  .loading { display: inline-block; animation: pulse 1.5s ease-in-out infinite; }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  /* Loading */
+  .loading-wrap { display: flex; align-items: center; gap: 10px; }
+  .loading-dots { display: flex; gap: 4px; }
+  .loading-dots span {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent-light);
+    animation: dotPulse 1.4s ease-in-out infinite;
+  }
+  .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes dotPulse { 0%,80%,100% { opacity: 0.2; transform: scale(0.8); } 40% { opacity: 1; transform: scale(1.1); } }
 
-  .sub-queries { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
-  .sub-query-tag { padding: 3px 8px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; font-size: 11px; color: var(--text-secondary); }
+  .timer-display { color: var(--text-muted); font-size: 12px; font-family: var(--font-mono); }
 
-  ::-webkit-scrollbar { width: 6px; }
-  ::-webkit-scrollbar-track { background: var(--bg-primary); }
-  ::-webkit-scrollbar-thumb { background: var(--bg-tertiary); border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: var(--border); }
+  /* Sub-queries */
+  .sub-queries { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .sub-query-tag {
+    padding: 5px 12px; border-radius: 8px; font-size: 11px;
+    color: var(--text-secondary);
+    background: var(--glass); border: 1px solid var(--glass-border);
+    font-family: var(--font-mono);
+  }
+  .sub-query-tag.executed { border-color: rgba(52,211,153,0.2); color: var(--success); background: rgba(52,211,153,0.05); }
 
-  /* Chat navigation (right side floating dots) */
-  .content { position: relative; }
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 10px; }
+  ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.14); }
+
+  /* Chat navigation dots */
   .chat-nav {
-    position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
-    display: flex; flex-direction: column; gap: 8px; z-index: 10;
+    position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+    display: flex; flex-direction: column; gap: 10px; z-index: 10;
     max-height: 70vh; overflow-y: auto;
   }
   .chat-nav:empty { display: none; }
   .chat-nav-dot {
-    width: 10px; height: 10px; border-radius: 50%;
-    background: var(--bg-tertiary); border: 2px solid var(--border);
-    cursor: pointer; transition: all 0.2s; flex-shrink: 0;
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--text-muted); border: none;
+    cursor: pointer; transition: all 0.25s; flex-shrink: 0;
+    opacity: 0.4;
   }
-  .chat-nav-dot:hover { background: var(--accent); border-color: var(--accent); }
-  .chat-nav-dot.active { background: var(--accent); border-color: var(--accent-light); }
+  .chat-nav-dot:hover { opacity: 1; background: var(--accent-light); box-shadow: 0 0 8px var(--accent-glow); }
+  .chat-nav-dot.active { opacity: 1; background: var(--accent); box-shadow: 0 0 10px var(--accent-glow); }
   #nav-tooltip {
     position: fixed; z-index: 100;
-    background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border);
-    padding: 6px 14px; border-radius: 8px; font-size: 12px;
+    background: var(--bg-secondary); color: var(--text-primary);
+    border: 1px solid var(--glass-border); backdrop-filter: blur(12px);
+    padding: 8px 14px; border-radius: 10px; font-size: 12px;
     max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
     pointer-events: none; opacity: 0; transition: opacity 0.15s;
   }
   #nav-tooltip.visible { opacity: 1; }
+
+  /* Done card */
+  .done-card {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 18px; border-radius: 12px;
+    background: rgba(52, 211, 153, 0.06);
+    border: 1px solid rgba(52, 211, 153, 0.15);
+    font-size: 13px; color: var(--success);
+  }
+  .done-card svg { width: 18px; height: 18px; fill: var(--success); flex-shrink: 0; }
+  .done-card .done-meta { color: var(--text-muted); font-size: 11px; font-family: var(--font-mono); }
 </style>
 </head>
 <body>
@@ -218,15 +413,18 @@
 
 <div class="header">
   <div class="header-left">
-    <div class="logo">PaperPilot</div>
-    <span class="badge">AI 科研助手</span>
+    <div class="logo-wrap">
+      <div class="logo-icon"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div>
+      <span class="logo-text">PaperPilot</span>
+    </div>
+    <span class="badge">AI Research</span>
   </div>
-  <div class="header-right">
-    <div class="step-badge" data-step="planner">规划</div>
-    <div class="step-badge" data-step="researcher">研究</div>
-    <div class="step-badge" data-step="synthesizer">综合</div>
-    <div class="step-badge" data-step="writer">撰写</div>
-    <div class="step-badge" data-step="reviewer">审核</div>
+  <div class="pipeline">
+    <div class="step-badge" data-step="planner"><svg viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" fill="none" stroke="currentColor" stroke-width="2"/></svg>规划</div>
+    <div class="step-badge" data-step="researcher"><svg viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" fill="none" stroke="currentColor" stroke-width="2"/></svg>研究</div>
+    <div class="step-badge" data-step="synthesizer"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h7" fill="none" stroke="currentColor" stroke-width="2"/></svg>综合</div>
+    <div class="step-badge" data-step="writer"><svg viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" fill="none" stroke="currentColor" stroke-width="2"/></svg>撰写</div>
+    <div class="step-badge" data-step="reviewer"><svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" fill="none" stroke="currentColor" stroke-width="2"/></svg>审核</div>
   </div>
 </div>
 
@@ -234,17 +432,17 @@
   <div class="sidebar">
     <div class="sidebar-top">
       <div class="sidebar-title-row">
-        <span class="sidebar-title">研究历史</span>
-        <button class="btn-new" onclick="newResearch()">+ 新研究</button>
+        <span class="sidebar-title">Research History</span>
+        <button class="btn-new" onclick="newResearch()">+ New</button>
       </div>
     </div>
     <div class="history-list" id="history-list">
-      <div class="history-empty">暂无历史记录</div>
+      <div class="history-empty">No history yet</div>
     </div>
     <div class="sidebar-bottom">
       <div class="upload-area" onclick="document.getElementById('file-input').click()">
-        <div class="upload-icon">📄</div>
-        <div class="upload-text">拖放或点击上传文档</div>
+        <div class="upload-icon"><svg viewBox="0 0 24 24"><path d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="upload-text">Upload Documents</div>
         <div class="upload-formats">PDF / TXT / MD / DOCX</div>
         <input type="file" id="file-input" accept=".pdf,.txt,.md,.docx" style="display:none">
       </div>
@@ -254,18 +452,35 @@
   <div class="content">
     <div class="chat-area" id="chat-area">
       <div class="welcome-card">
-        <div class="welcome-title">欢迎使用 PaperPilot</div>
-        <div class="welcome-text">
-          输入研究问题，我将检索学术论文、代码仓库和网络资源，生成带引用的研究报告。<br>
-          左侧可查看历史研究记录，点击可回顾并继续追问。
+        <div class="welcome-icon"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div>
+        <div class="welcome-title">PaperPilot</div>
+        <div class="welcome-sub">
+          AI 驱动的科研助手 — 输入研究问题，自动检索学术论文、代码仓库和网络资源，<br>生成带引用的结构化研究报告。支持上传文档和多轮追问。
+        </div>
+        <div class="feature-grid">
+          <div class="feature-item">
+            <div class="feature-icon">🔬</div>
+            <div class="feature-label">多源学术检索</div>
+          </div>
+          <div class="feature-item">
+            <div class="feature-icon">📄</div>
+            <div class="feature-label">RAG 文档理解</div>
+          </div>
+          <div class="feature-item">
+            <div class="feature-icon">💬</div>
+            <div class="feature-label">连续追问对话</div>
+          </div>
         </div>
       </div>
     </div>
     <div class="chat-nav" id="chat-nav"></div>
     <div class="input-area">
       <div class="input-wrap">
-        <input type="text" id="query-input" class="input-field" placeholder="输入您的研究问题..." autofocus>
-        <button id="research-btn" class="btn-primary" onclick="startResearch()">开始研究</button>
+        <input type="text" id="query-input" class="input-field" placeholder="Describe your research question..." autofocus>
+        <button id="research-btn" class="btn-primary" onclick="startResearch()">
+          <svg viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+          Start
+        </button>
       </div>
     </div>
   </div>
@@ -274,12 +489,16 @@
 <script>
 const API = window.location.origin;
 let ws = null;
-let currentSessionId = null;   // tracks current session for follow-ups
+let currentSessionId = null;
 let timerInterval = null;
 let timerStart = 0;
-let conversationHistory = [];  // [{role, content, report?}] — full session memory
-let lastReportText = '';       // track latest report for history
-let turnAnchors = [];          // [{el, query}] — DOM refs for nav dots
+let conversationHistory = [];
+let lastReportText = '';
+let turnAnchors = [];
+
+// ─── Avatars ────────────────────────────
+const USER_AV = '<svg viewBox="0 0 24 24"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>';
+const AI_AV = '<svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>';
 
 // ─── Chat Navigation ──────────────────────
 let tooltipTimer = null;
@@ -314,7 +533,6 @@ function clearNav() {
   turnAnchors = [];
 }
 
-// Highlight active dot based on scroll position
 document.addEventListener('DOMContentLoaded', () => {
   const chat = document.getElementById('chat-area');
   chat.addEventListener('scroll', () => {
@@ -339,7 +557,7 @@ function startTimer() {
 function stopTimer() { if (timerInterval) { clearInterval(timerInterval); timerInterval = null; } }
 function formatElapsed() {
   const s = Math.floor((Date.now() - timerStart) / 1000);
-  return s >= 60 ? `${Math.floor(s/60)}分${s%60}秒` : `${s}秒`;
+  return s >= 60 ? `${Math.floor(s/60)}m${s%60}s` : `${s}s`;
 }
 
 // ─── Input ─────────────────────────────────
@@ -360,12 +578,11 @@ function startResearch() {
 
   addMessage('user', query);
   addNavDot(query, document.querySelector('.message.user:last-child'));
-  // Track user query in conversation history
   conversationHistory.push({ role: 'user', content: query });
 
   resetSteps();
   startTimer();
-  addMessage('assistant', '<span class="loading">正在启动研究流程...</span> <span id="timer-display" style="color:var(--text-muted);font-size:12px">0秒</span>');
+  addMessage('assistant', `<div class="loading-wrap"><div class="loading-dots"><span></span><span></span><span></span></div><span>Initializing research pipeline...</span><span id="timer-display" class="timer-display">0s</span></div>`);
 
   const payload = { query, conversation_history: conversationHistory };
   if (currentSessionId) payload.session_id = currentSessionId;
@@ -374,7 +591,7 @@ function startResearch() {
   ws = new WebSocket(wsUrl);
   ws.onopen = () => ws.send(JSON.stringify(payload));
   ws.onmessage = (e) => handleWSEvent(JSON.parse(e.data));
-  ws.onerror = () => { addMessage('assistant', 'WebSocket 连接失败，切换到 HTTP 模式...'); fallbackHTTP(payload); };
+  ws.onerror = () => { addMessage('assistant', 'WebSocket connection failed, falling back to HTTP...'); fallbackHTTP(payload); };
   ws.onclose = () => { ws = null; };
 }
 
@@ -387,8 +604,8 @@ function handleWSEvent(msg) {
       break;
     case 'node_start': {
       const last = chat.querySelector('.message.assistant:last-child .bubble');
-      const html = `<span class="loading">${msg.data.message}</span> <span id="timer-display" style="color:var(--text-muted);font-size:12px">${formatElapsed()}</span>`;
-      if (last && last.querySelector('.loading')) { last.innerHTML = html; }
+      const html = `<div class="loading-wrap"><div class="loading-dots"><span></span><span></span><span></span></div><span>${msg.data.message}</span><span id="timer-display" class="timer-display">${formatElapsed()}</span></div>`;
+      if (last && last.querySelector('.loading-wrap')) { last.innerHTML = html; }
       else addMessage('assistant', html);
       break;
     }
@@ -399,36 +616,33 @@ function handleWSEvent(msg) {
       const tags = msg.data.map(sq =>
         `<span class="sub-query-tag">${sq.tool}: ${sq.question.substring(0, 50)}</span>`
       ).join('');
-      addMessage('assistant', `<strong>研究计划：</strong><div class="sub-queries">${tags}</div>`);
+      addMessage('assistant', `<strong style="color:var(--text-primary);font-size:13px">Research Plan</strong><div class="sub-queries">${tags}</div>`);
       break;
     }
     case 'results':
-      addMessage('assistant', `已收集 ${msg.data.count} 条研究结果`);
+      addMessage('assistant', `<span style="color:var(--cyan)">${msg.data.count}</span> results collected`);
       break;
     case 'done':
       stopTimer();
       completeAllSteps();
       document.getElementById('research-btn').disabled = false;
       if (msg.data.report) {
-        // Save report to conversation history
         conversationHistory.push({ role: 'assistant', content: '', report: msg.data.report });
         lastReportText = msg.data.report;
-        // Show report first (scrolls to report top), then add completion msg without scroll
         showReport(msg.data.report);
-        addMessage('assistant', `✅ 研究完成！用时 ${formatElapsed()}，报告已保存至 ${msg.data.report_path}`, false);
+        addMessage('assistant', `<div class="done-card"><svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" fill="none" stroke="currentColor" stroke-width="2"/></svg><div><span>Research complete</span><span class="done-meta">${formatElapsed()} · ${msg.data.report_path}</span></div></div>`, false);
       } else {
-        addMessage('assistant', `✅ 研究完成！用时 ${formatElapsed()}`);
+        addMessage('assistant', `<div class="done-card"><svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" fill="none" stroke="currentColor" stroke-width="2"/></svg><span>Research complete · ${formatElapsed()}</span></div>`);
       }
       currentSessionId = msg.data.session_id;
       loadHistory();
       break;
     case 'error':
       stopTimer();
-      addMessage('assistant', `<span style="color:var(--error)">错误：${msg.data}</span>`);
+      addMessage('assistant', `<span style="color:var(--error)">Error: ${msg.data}</span>`);
       document.getElementById('research-btn').disabled = false;
       break;
   }
-  // Scroll to bottom for progress events; skip for done (already scrolled to report)
   if (msg.event !== 'done') {
     chat.scrollTop = chat.scrollHeight;
   }
@@ -446,14 +660,14 @@ async function fallbackHTTP(payload) {
       currentSessionId = data.session_id;
       const status = await fetch(`${API}/api/sessions/${data.session_id}`).then(r => r.json());
       if (status.report) showReport(status.report);
-      addMessage('assistant', `✅ 研究完成！用时 ${formatElapsed()}`);
+      addMessage('assistant', `<div class="done-card"><span>Research complete · ${formatElapsed()}</span></div>`);
       loadHistory();
     } else {
       addMessage('assistant', `<span style="color:var(--error)">${data.message}</span>`);
     }
   } catch (err) {
     stopTimer();
-    addMessage('assistant', `<span style="color:var(--error)">请求失败：${err.message}</span>`);
+    addMessage('assistant', `<span style="color:var(--error)">Request failed: ${err.message}</span>`);
   }
   document.getElementById('research-btn').disabled = false;
 }
@@ -464,12 +678,12 @@ async function loadHistory() {
     const res = await fetch(`${API}/api/sessions`);
     const sessions = await res.json();
     const list = document.getElementById('history-list');
-    if (!sessions.length) { list.innerHTML = '<div class="history-empty">暂无历史记录</div>'; return; }
+    if (!sessions.length) { list.innerHTML = '<div class="history-empty">No history yet</div>'; return; }
     list.innerHTML = sessions.map(s => `
       <div class="history-item${s.id===currentSessionId?' active':''}" data-id="${s.id}" onclick="loadSession('${s.id}')">
         <div class="history-item-title">${escHtml(s.query)}</div>
         <div class="history-item-meta">${s.created_at}</div>
-        <button class="del-btn" onclick="event.stopPropagation();deleteSession('${s.id}')" title="删除">×</button>
+        <button class="del-btn" onclick="event.stopPropagation();deleteSession('${s.id}')" title="Delete">×</button>
       </div>
     `).join('');
   } catch (e) { console.error('loadHistory:', e); }
@@ -488,34 +702,30 @@ async function loadSession(id) {
     resetSteps();
     completeAllSteps();
 
-    // Rebuild conversation history from session data
     conversationHistory = [{ role: 'user', content: s.query }];
     if (s.report) {
       conversationHistory.push({ role: 'assistant', content: '', report: s.report });
     }
 
-    // Session header
     const header = document.createElement('div');
     header.className = 'session-header';
     header.innerHTML = `<span class="session-header-query">${escHtml(s.query)}</span><span class="session-header-meta">${s.created_at}</span>`;
     chat.appendChild(header);
 
-    // Original query + report
     addMessage('user', s.query);
     addNavDot(s.query, document.querySelector('.message.user:last-child'));
     if (s.sub_queries && s.sub_queries.length) {
       const tags = s.sub_queries.map(sq =>
         `<span class="sub-query-tag executed">${sq.tool}: ${sq.question.substring(0,50)}</span>`
       ).join('');
-      addMessage('assistant', `<strong>研究计划：</strong><div class="sub-queries">${tags}</div>`);
+      addMessage('assistant', `<strong style="color:var(--text-primary);font-size:13px">Research Plan</strong><div class="sub-queries">${tags}</div>`);
     }
     if (s.report) showReport(s.report);
 
-    // Follow-ups
     if (s.followups) {
       for (const f of s.followups) {
         conversationHistory.push({ role: 'user', content: f.query });
-        addMessage('user', `<span class="followup-badge">追问</span> ${escHtml(f.query)}`);
+        addMessage('user', `<span class="followup-badge">Follow-up</span> ${escHtml(f.query)}`);
         addNavDot(f.query, document.querySelector('.message.user:last-child'));
         if (f.report) {
           showReport(f.report);
@@ -524,19 +734,17 @@ async function loadSession(id) {
       }
     }
 
-    // Highlight active in sidebar
     document.querySelectorAll('.history-item').forEach(el => {
       el.classList.toggle('active', el.dataset.id === id);
     });
 
-    // Update placeholder
-    document.getElementById('query-input').placeholder = '继续追问这个课题...';
+    document.getElementById('query-input').placeholder = 'Continue this research...';
     chat.scrollTop = chat.scrollHeight;
   } catch (e) { console.error('loadSession:', e); }
 }
 
 async function deleteSession(id) {
-  if (!confirm('确定删除这条记录？')) return;
+  if (!confirm('Delete this session?')) return;
   await fetch(`${API}/api/sessions/${id}`, { method: 'DELETE' });
   if (currentSessionId === id) { currentSessionId = null; newResearch(); }
   loadHistory();
@@ -550,14 +758,19 @@ function newResearch() {
   const chat = document.getElementById('chat-area');
   chat.innerHTML = `
     <div class="welcome-card">
-      <div class="welcome-title">欢迎使用 PaperPilot</div>
-      <div class="welcome-text">
-        输入研究问题，我将检索学术论文、代码仓库和网络资源，生成带引用的研究报告。<br>
-        左侧可查看历史研究记录，点击可回顾并继续追问。
+      <div class="welcome-icon"><svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div>
+      <div class="welcome-title">PaperPilot</div>
+      <div class="welcome-sub">
+        AI 驱动的科研助手 — 输入研究问题，自动检索学术论文、代码仓库和网络资源，<br>生成带引用的结构化研究报告。支持上传文档和多轮追问。
+      </div>
+      <div class="feature-grid">
+        <div class="feature-item"><div class="feature-icon">🔬</div><div class="feature-label">多源学术检索</div></div>
+        <div class="feature-item"><div class="feature-icon">📄</div><div class="feature-label">RAG 文档理解</div></div>
+        <div class="feature-item"><div class="feature-icon">💬</div><div class="feature-label">连续追问对话</div></div>
       </div>
     </div>`;
   resetSteps();
-  document.getElementById('query-input').placeholder = '输入您的研究问题...';
+  document.getElementById('query-input').placeholder = 'Describe your research question...';
   document.getElementById('query-input').focus();
   document.querySelectorAll('.history-item').forEach(el => el.classList.remove('active'));
 }
@@ -566,9 +779,9 @@ function newResearch() {
 document.getElementById('file-input').addEventListener('change', uploadFile);
 const uploadArea = document.querySelector('.upload-area');
 uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.style.borderColor='var(--accent)'; });
-uploadArea.addEventListener('dragleave', () => { uploadArea.style.borderColor='var(--border)'; });
+uploadArea.addEventListener('dragleave', () => { uploadArea.style.borderColor=''; });
 uploadArea.addEventListener('drop', (e) => {
-  e.preventDefault(); uploadArea.style.borderColor='var(--border)';
+  e.preventDefault(); uploadArea.style.borderColor='';
   if (e.dataTransfer.files.length) uploadFile({target:{files:e.dataTransfer.files}});
 });
 
@@ -578,9 +791,9 @@ async function uploadFile(e) {
   try {
     const res = await fetch(`${API}/api/documents`, { method:'POST', body: form });
     const data = await res.json();
-    addMessage('assistant', `✅ 文档已上传：${data.filename}（已索引 ${data.chunk_count} 个文本块）`);
+    addMessage('assistant', `<span style="color:var(--success)">Document uploaded:</span> ${data.filename} <span style="color:var(--text-muted)">(${data.chunk_count} chunks indexed)</span>`);
   } catch (err) {
-    addMessage('assistant', `❌ 上传失败：${err.message}`);
+    addMessage('assistant', `<span style="color:var(--error)">Upload failed: ${err.message}</span>`);
   }
 }
 
@@ -589,7 +802,8 @@ function addMessage(role, content, scroll = true) {
   const chat = document.getElementById('chat-area');
   const div = document.createElement('div');
   div.className = `message ${role}`;
-  div.innerHTML = `<div class="bubble">${content}</div>`;
+  const avatar = role === 'user' ? USER_AV : AI_AV;
+  div.innerHTML = `<div class="msg-avatar">${avatar}</div><div class="bubble">${content}</div>`;
   chat.appendChild(div);
   if (scroll) chat.scrollTop = chat.scrollHeight;
   return div;
@@ -605,7 +819,6 @@ function showReport(md) {
     .replace(/`(.+?)`/g, '<code>$1</code>')
     .replace(/\n/g, '<br>');
   const el = addMessage('assistant', `<div class="report-content">${html}</div>`, false);
-  // Scroll to the TOP of the report so user reads from the beginning
   el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
