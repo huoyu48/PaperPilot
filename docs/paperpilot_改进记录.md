@@ -409,3 +409,57 @@ def writer_node(state):
 | RAG | 90s 卡死或 "client closed" 错误 | 10s 超时保护；启动后后台预热 |
 
 **涉及文件**：`src/tools/web_search_tool.py`, `src/tools/arxiv_tool.py`, `src/rag/vectorstore.py`, `src/agent/researcher.py`, `src/backend/app.py`
+
+---
+
+### 问题 10：报告中的"最新研究"截止到 2025 年而非 2026 年
+
+**现象**：2026 年 6 月底使用系统研究某个主题，生成的报告中"最新进展"部分仍然停留在 2025 年，完全没有 2026 年的内容。
+
+**根因**：`planner.py` 顶部在 **import 时**就计算了年份常量：
+
+```python
+# 旧代码 — 模块级常量，进程启动后锁死
+_YEAR_NOW = datetime.now().year
+_YEAR_PREV = _YEAR_NOW - 1
+_YEARS = f"{_YEAR_PREV} {_YEAR_NOW}"
+```
+
+这意味着：
+1. 进程一旦启动，`_YEARS` 的值就固定不变，即使跨年也不会更新
+2. uvicorn `--reload` 模式下，只有 Python 源码文件改动才会重启 worker；只要模块没改，进程一直存活，变量不会刷新
+3. 如果服务是 2025 年启动的，到 2026 年子查询依然带 `"2024 2025"`，检索到的都是旧资料
+
+**修复**：把模块级常量改为**函数式调用**，每次生成子查询时都重新读取当前年份：
+
+```python
+# 新代码 — 函数式，每次调用都拿实时年份
+def _years_str() -> str:
+    now = datetime.now().year
+    return f"{now - 1} {now}"
+
+def _year_now() -> int:
+    return datetime.now().year
+```
+
+同时在 `writer.py` 的 system prompt 中注入当前日期，让 LLM 明确知道"今天是 2026-06-30"，对"最新/近期"的判断基于真实当前日期，而不是数据源中提到的旧日期：
+
+```python
+SYSTEM_PROMPT = f"""\
+...
+## Current Date Context
+
+Today is {datetime.now().strftime("%B %d, %Y")}. When sources discuss "recent" or \
+"latest" developments, interpret them relative to this date, not the dates mentioned \
+in the sources. Prefer information from {datetime.now().year} and {datetime.now().year - 1}.
+...
+"""
+```
+
+**效果**：
+
+| 时间 | 修复前子查询 | 修复后子查询 |
+|------|-------------|-------------|
+| 2026-06 | `xxx 最新进展 2024 2025` | `xxx 最新进展 2025 2026` |
+
+**涉及文件**：`src/agent/planner.py`, `src/agent/writer.py`
